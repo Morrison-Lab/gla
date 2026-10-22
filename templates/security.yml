@@ -1,0 +1,15 @@
+# HACtions: Security scanning template
+# Include this in your .gitlab-ci.yml for SAST and secret detection.
+#
+# This wraps GitLab's built-in security templates and assigns them
+# to the 'secrets' stage.
+
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+sast:
+  stage: secrets
+
+secret_detection:
+  stage: secrets

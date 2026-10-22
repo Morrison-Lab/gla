@@ -1,0 +1,341 @@
+# HACtions: Claude AI agent template
+# Include this in your .gitlab-ci.yml to enable @claude mentions in MR comments
+# and automatic code review on push.
+#
+# Required CI/CD Variables (set in Settings > CI/CD > Variables):
+#   ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN — Databricks PAT
+#   ANTHROPIC_BASE_URL — Databricks serving endpoint URL
+#   GITLAB_TOKEN — Project access token with api scope (Developer role).
+#     Needed to post comments and push commits on YOUR project.
+#
+# Fetching scripts from HACtions does NOT need GITLAB_TOKEN. It uses the
+# built-in CI_JOB_TOKEN, which works cross-project once your project is added
+# to HACtions' allowlist (HACtions > Settings > CI/CD > Job token permissions).
+# GitLab only accepts a job token under the `JOB-TOKEN:` header -- sending it as
+# `PRIVATE-TOKEN:` returns 404. See issue #52 for the same bug in
+# version-check.yml.
+#
+# Optional CI/CD Variables:
+#   HAC_HACTIONS_PROJECT_ID — Project ID of the HACtions repo (default set below)
+#   HAC_HACTIONS_REF — Branch/tag of HACtions to fetch scripts from (default: main)
+#   REVIEW_MODEL — automatic reviewer endpoint (default: databricks-gpt-5-6-sol)
+#   HAC_CLAUDE_COMPANION_REVIEW — set to "true" for an additional Claude review
+#   HAC_SKIP_MERGE_COMMITS — set to "true" to skip auto-review on merge commits (default: false)
+#   HAC_REVIEW_AGENT — set to "false" to use the bounded prompt-only reviewer
+#   HAC_MAX_REVIEW_TOOL_ROUNDS — maximum read-only exploration rounds (default: 8)
+#   HAC_MAX_REVIEW_TOOL_CALLS — maximum tool calls per model response (default: 16)
+#   HAC_MAX_REVIEW_TOOL_RESULT_CHARS — total retained tool output (default: 120000)
+#   HAC_MAX_REVIEW_RESPONSE_CHARS — maximum endpoint response size (default: 200000)
+#   HAC_REVIEW_DEADLINE_SECONDS — overall review deadline (default: 480)
+#   HAC_MAX_REVIEW_NOTES_CHARS — cumulative MR-note response budget (default: 500000)
+#
+# Setup:
+#   1. Create a Pipeline Trigger Token (Settings > CI/CD > Pipeline triggers)
+#   2. Create a Webhook (Settings > Webhooks):
+#      URL: https://gitlab.example.com/api/v4/projects/<PROJECT_ID>/ref/<DEFAULT_BRANCH>/trigger/pipeline?token=<TRIGGER_TOKEN>
+#      Trigger: "Note events" only
+#   3. Set the CI/CD variables listed above
+#
+# Scripts are fetched automatically from HACtions at runtime.
+# To override, place your own .gitlab/scripts/claude-review.sh or
+# claude-respond.sh in your repo — the local copy takes precedence.
+
+.hac-claude-review:
+  stage: claude
+  image: ubuntu:24.04
+  needs: []
+  # Per-branch serialization: only one review at a time per branch.
+  # CI_COMMIT_REF_SLUG is the branch slug (lowercased/truncated to 63 chars).
+  # Branches differing only by case or past 63 chars would share a
+  # resource_group (causing serialization, not incorrectness). Low risk.
+  resource_group: claude-review-$CI_COMMIT_REF_SLUG
+  interruptible: true
+  rules:
+    # ORDERING IS LOAD-BEARING: GitLab uses first-match semantics for rules.
+    # The immediate rule MUST precede the delayed one, otherwise every MR review
+    # would incur a 60s delay.
+    #
+    # Run immediately when an MR already exists for this branch.
+    # We use branch pipelines (not merge_request_event) because workflow.yml
+    # suppresses MR-event pipelines to prevent duplicate pipeline runs.
+    # CI_OPEN_MERGE_REQUESTS is set by GitLab when the branch has an open MR.
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+    # Also run on branch pushes WITHOUT an MR, but delayed 60s to give time
+    # for MR creation (common race: push triggers pipeline before `glab mr
+    # create` finishes). The script exits cleanly if no MR exists after the
+    # delay. Only non-default branches — reviewing main is pointless.
+    #
+    # Overlap note: if a delayed job starts AND a subsequent push triggers an
+    # immediate job (rule 1), both execute. This is benign because
+    # resource_group serializes them. Multiple review comments may appear but
+    # findings are only resolved when actually addressed: by the respond agent
+    # (resolve_addressed_threads, on files touched by the push) or by the review
+    # agent itself (resolve_verified_threads, for prior threads not re-raised).
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      when: delayed
+      start_in: 60 seconds
+  variables:
+    GIT_STRATEGY: clone
+    GIT_CHECKOUT: "true"
+    GIT_DEPTH: 0
+    HAC_HACTIONS_PROJECT_ID: "2058"
+    HAC_HACTIONS_REF: "main"
+  before_script:
+    - |
+      # apt drops privileges to the `_apt` user to verify indexes. Where that
+      # sandbox cannot run gpgv -- an outdated libseccomp on the docker host is
+      # the usual cause -- every index is rejected with "At least one invalid
+      # signature was encountered" even though it downloaded intact. Verifying
+      # as root skips the sandbox and keeps the signature check itself.
+      set -eu
+      apt-get -o APT::Sandbox::User=root update
+      apt-get install -y -qq curl git jq
+      # apt-get update exits 0 even when every index fails to download, so no
+      # exit status above establishes that the tools arrived. Check directly:
+      # otherwise the job runs on and dies far below with "curl: command not
+      # found", a hundred lines from the cause.
+      for tool in curl git jq; do
+        command -v "$tool" >/dev/null 2>&1 || {
+          echo "ERROR: $tool was not installed; cannot continue." >&2
+          exit 1
+        }
+      done
+      # A missing GITLAB_TOKEN otherwise sends an empty PRIVATE-TOKEN header,
+      # and the 401 surfaces as "Failed to fetch claude-review.sh from
+      # HACtions" -- which points at HACtions rather than at this project's
+      # settings. The commonest cause is the variable being marked protected
+      # while the branch under review is not a protected branch, so it is
+      # defined and still absent from the job.
+      if [ -z "${GITLAB_TOKEN:-}" ]; then
+        echo "ERROR: GITLAB_TOKEN is empty or unset." >&2
+        echo "  Set it under Settings > CI/CD > Variables (api scope, Developer role)." >&2
+        echo "  If it is already set, check whether it is marked 'Protected':" >&2
+        echo "  protected variables reach protected branches only, so an MR" >&2
+        echo "  branch gets nothing." >&2
+        exit 1
+      fi
+      # The following fetches make the optional lab-manual context non-fatal.
+      # They use explicit guards, so strict mode stops here by design.
+      set +eu
+    - |
+      # Fetch claude-review.sh and its lib dependencies from HACtions if not present locally
+      mkdir -p .gitlab/scripts/lib
+
+      fetch_hactions_file() {
+        local source_path="$1"
+        local destination="$2"
+        local url="${CI_API_V4_URL}/projects/${HAC_HACTIONS_PROJECT_ID}/repository/files/${source_path}/raw?ref=${HAC_HACTIONS_REF}"
+
+        if [[ -n "${CI_JOB_TOKEN:-}" ]] &&
+          curl -fsS --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "$url" -o "$destination"; then
+          return 0
+        fi
+
+        echo "WARNING: Job-token fetch failed for ${source_path}; retrying with GITLAB_TOKEN." >&2
+        curl -fsS --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" "$url" -o "$destination"
+      }
+
+      if [[ ! -f .gitlab/scripts/claude-review.sh ]]; then
+        echo "Fetching claude-review.sh from HACtions (project ${HAC_HACTIONS_PROJECT_ID}, ref ${HAC_HACTIONS_REF})..."
+        fetch_hactions_file scripts%2Fclaude-review.sh .gitlab/scripts/claude-review.sh \
+          || { echo "ERROR: Failed to fetch claude-review.sh from HACtions"; exit 1; }
+        # Fetch lib files needed by claude-review.sh.
+        # NOTE: The review path only fetches lib/lab-manual.sh explicitly (not the
+        # full LIB_FILES set used by claude-respond). If claude-review.sh grows
+        # dependencies on other lib modules, add them here. The check-lib-files-sync
+        # CI job only validates the respond-side LIB_FILES list, not this review path.
+        fetch_hactions_file scripts%2Flib%2Flab-manual.sh .gitlab/scripts/lib/lab-manual.sh \
+          || { echo "WARNING: Failed to fetch lib/lab-manual.sh — lab manual context will be unavailable"; }
+        echo "Successfully fetched claude-review.sh"
+      else
+        echo "Using local .gitlab/scripts/claude-review.sh"
+      fi
+      # COUPLING: claude-review.sh sources lib/logging.sh for log/log_error
+      # helpers and GitLab CI collapsible sections. Must be fetched before
+      # gitlab-api.sh (which also uses logging functions).
+      if [[ ! -f .gitlab/scripts/lib/logging.sh ]]; then
+        fetch_hactions_file scripts%2Flib%2Flogging.sh .gitlab/scripts/lib/logging.sh \
+          || { echo "ERROR: Failed to fetch lib/logging.sh from HACtions"; exit 1; }
+        echo "Fetched lib/logging.sh"
+      fi
+      # COUPLING: claude-review.sh sources lib/gitlab-api.sh for shared helpers
+      # (wip-lock, gl_api, has_bot_wip_lock). If that file is renamed/moved,
+      # update both the source statement in claude-review.sh AND this fetch path.
+      if [[ ! -f .gitlab/scripts/lib/gitlab-api.sh ]]; then
+        fetch_hactions_file scripts%2Flib%2Fgitlab-api.sh .gitlab/scripts/lib/gitlab-api.sh \
+          || { echo "ERROR: Failed to fetch lib/gitlab-api.sh from HACtions"; exit 1; }
+        echo "Fetched lib/gitlab-api.sh"
+      fi
+      if [[ ! -f .gitlab/scripts/lib/select-author-response.sh ]]; then
+        fetch_hactions_file scripts%2Flib%2Fselect-author-response.sh .gitlab/scripts/lib/select-author-response.sh \
+          || { echo "ERROR: Failed to fetch lib/select-author-response.sh from HACtions"; exit 1; }
+        echo "Fetched lib/select-author-response.sh"
+      fi
+      if [[ ! -f .gitlab/scripts/lib/select-review-note.sh ]]; then
+        fetch_hactions_file scripts%2Flib%2Fselect-review-note.sh .gitlab/scripts/lib/select-review-note.sh \
+          || { echo "ERROR: Failed to fetch lib/select-review-note.sh from HACtions"; exit 1; }
+        echo "Fetched lib/select-review-note.sh"
+      fi
+      if [[ ! -f .gitlab/scripts/lib/validate-nonnegative-integer.sh ]]; then
+        fetch_hactions_file scripts%2Flib%2Fvalidate-nonnegative-integer.sh .gitlab/scripts/lib/validate-nonnegative-integer.sh \
+          || { echo "ERROR: Failed to fetch lib/validate-nonnegative-integer.sh from HACtions"; exit 1; }
+        echo "Fetched lib/validate-nonnegative-integer.sh"
+      fi
+      if [[ ! -f .gitlab/scripts/lib/format-review-comment.sh ]]; then
+        fetch_hactions_file scripts%2Flib%2Fformat-review-comment.sh .gitlab/scripts/lib/format-review-comment.sh \
+          || { echo "ERROR: Failed to fetch lib/format-review-comment.sh from HACtions"; exit 1; }
+        echo "Fetched lib/format-review-comment.sh"
+      fi
+      if [[ ! -f .gitlab/scripts/lib/review-tools.sh ]]; then
+        fetch_hactions_file scripts%2Flib%2Freview-tools.sh .gitlab/scripts/lib/review-tools.sh \
+          || { echo "ERROR: Failed to fetch lib/review-tools.sh from HACtions"; exit 1; }
+        echo "Fetched lib/review-tools.sh"
+      fi
+      if [[ ! -f .gitlab/scripts/lib/context-priority.sh ]]; then
+        fetch_hactions_file scripts%2Flib%2Fcontext-priority.sh .gitlab/scripts/lib/context-priority.sh \
+          || { echo "ERROR: Failed to fetch lib/context-priority.sh from HACtions"; exit 1; }
+        echo "Fetched lib/context-priority.sh"
+      fi
+  script:
+    - chmod +x .gitlab/scripts/claude-review.sh
+    - .gitlab/scripts/claude-review.sh
+  timeout: 10 minutes
+  tags:
+    - docker
+  allow_failure: true
+
+.hac-claude-respond:
+  stage: claude
+  image: ubuntu:24.04
+  needs: []
+  # Global serialization: only one respond job at a time per project.
+  # Cannot use per-branch resource_group here because trigger pipelines run on
+  # the default branch (CI_COMMIT_REF_SLUG = "main"), not the MR branch.
+  # See issue #7 for context on this design.
+  #
+  # Safety model (two layers):
+  # 1. resource_group: claude-respond — GitLab guarantees at most one respond
+  #    job runs at a time across the entire project. This is the primary
+  #    concurrency guard and is race-free by construction.
+  # 2. wip:ci-bot label (application-level) — provides per-MR mutual exclusion
+  #    so a respond job won't start if another is already modifying that MR.
+  #    This is a best-effort TOCTOU check (not atomic), but races are benign
+  #    because layer 1 already prevents true concurrent execution.
+  #
+  # Accepted tradeoff: respond jobs across all MRs run strictly one-at-a-time,
+  # which may bottleneck on very active projects. This is the cost of not
+  # having a per-MR slug available in trigger pipelines.
+  resource_group: claude-respond
+  interruptible: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+  variables:
+    GIT_STRATEGY: clone
+    GIT_CHECKOUT: "true"
+    CLAUDE_ITERATION: "${CLAUDE_ITERATION:-1}"
+    CLAUDE_MAX_ITERATIONS: "3"
+    HAC_HACTIONS_PROJECT_ID: "2058"
+    HAC_HACTIONS_REF: "main"
+  before_script:
+    - |
+      # See the same block in .hac-claude-review for why the sandbox is
+      # bypassed and why the tools are checked for rather than assumed.
+      set -eu
+      apt-get -o APT::Sandbox::User=root update
+      # findutils provides the find binary checked below.
+      apt-get install -y -qq curl git jq findutils perl
+      for tool in curl git jq find perl; do
+        command -v "$tool" >/dev/null 2>&1 || {
+          echo "ERROR: $tool was not installed; cannot continue." >&2
+          exit 1
+        }
+      done
+      if [ -z "${GITLAB_TOKEN:-}" ]; then
+        echo "ERROR: GITLAB_TOKEN is empty or unset." >&2
+        echo "  Set it under Settings > CI/CD > Variables (api scope, Developer role)." >&2
+        echo "  If it is already set, check whether it is marked 'Protected':" >&2
+        echo "  protected variables reach protected branches only, so an MR" >&2
+        echo "  branch gets nothing." >&2
+        exit 1
+      fi
+      # Later setup permits optional work, so it handles failures explicitly.
+      set +eu
+    - |
+      # Pick the auth header to match the token, the same way lint.yml does.
+      # A job token MUST be sent as JOB-TOKEN; under PRIVATE-TOKEN GitLab 404s.
+      if [[ -n "${CI_JOB_TOKEN:-}" ]]; then
+        HAC_AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN}"
+      elif [[ -n "${GITLAB_TOKEN:-}" ]]; then
+        HAC_AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
+      else
+        echo "ERROR: Neither CI_JOB_TOKEN nor GITLAB_TOKEN is set" >&2; exit 1
+      fi
+      export HAC_AUTH_HEADER
+    - |
+      if [[ -n "${TRIGGER_PAYLOAD_JSON:-}" ]]; then
+        export TRIGGER_PAYLOAD="/tmp/trigger_payload.json"
+        echo "$TRIGGER_PAYLOAD_JSON" > "$TRIGGER_PAYLOAD"
+        echo "Reconstructed TRIGGER_PAYLOAD from TRIGGER_PAYLOAD_JSON variable (self-iteration)."
+      fi
+    - |
+      # Fetch claude-respond.sh from HACtions if not present locally
+      mkdir -p .gitlab/scripts/lib
+      if [[ ! -f .gitlab/scripts/claude-respond.sh ]]; then
+        echo "Fetching claude-respond.sh from HACtions (project ${HAC_HACTIONS_PROJECT_ID}, ref ${HAC_HACTIONS_REF})..."
+        curl -sf --header "$HAC_AUTH_HEADER" \
+          "${CI_API_V4_URL}/projects/${HAC_HACTIONS_PROJECT_ID}/repository/files/scripts%2Fclaude-respond.sh/raw?ref=${HAC_HACTIONS_REF}" \
+          -o .gitlab/scripts/claude-respond.sh \
+          || { echo "ERROR: Failed to fetch claude-respond.sh from HACtions"; exit 1; }
+      else
+        echo "Using local .gitlab/scripts/claude-respond.sh"
+      fi
+      # Always fetch lib/ modules (required even when main script is overridden locally)
+      # ⚠️  KEEP IN SYNC with scripts/lib/*.sh — adding a new module requires updating this list.
+      # The HACtions repo itself uses a glob (cp scripts/lib/*.sh) so missing entries here
+      # won't break HACtions CI but WILL break downstream consumer repos silently.
+      LIB_FILES="context-priority.sh logging.sh gitlab-api.sh select-author-response.sh select-review-note.sh validate-nonnegative-integer.sh format-review-comment.sh review-tools.sh payload.sh checkout.sh key-files.sh gather.sh prompt.sh tools-schema.sh llm.sh edit-file.sh apply-changes.sh post-comment.sh git-push-issue.sh iterate.sh commit-push.sh lab-manual.sh"
+      FETCHED_COUNT=0
+      for lib in $LIB_FILES; do
+        if [[ ! -f ".gitlab/scripts/lib/${lib}" ]]; then
+          curl -sf --header "$HAC_AUTH_HEADER" \
+            "${CI_API_V4_URL}/projects/${HAC_HACTIONS_PROJECT_ID}/repository/files/scripts%2Flib%2F${lib}/raw?ref=${HAC_HACTIONS_REF}" \
+            -o ".gitlab/scripts/lib/${lib}" \
+            || { echo "ERROR: Failed to fetch lib/${lib} from HACtions"; exit 1; }
+          FETCHED_COUNT=$((FETCHED_COUNT + 1))
+        fi
+      done
+      if [[ $FETCHED_COUNT -gt 0 ]]; then
+        echo "Fetched ${FETCHED_COUNT} lib module(s) from HACtions"
+      else
+        echo "Using local lib/ modules"
+      fi
+  script:
+    - chmod +x .gitlab/scripts/claude-respond.sh .gitlab/scripts/lib/*.sh
+    - .gitlab/scripts/claude-respond.sh
+  timeout: 15 minutes
+  tags:
+    - docker
+
+claude-review:
+  extends: .hac-claude-review
+
+claude-companion-review:
+  extends: .hac-claude-review
+  # Keep the resource group inherited from .hac-claude-review. The needs entry
+  # below establishes primary-first order, while the shared group prevents old
+  # companions and new primaries from creating a cross-pipeline token burst.
+  # A new primary may wait for an older companion; that trade-off is intentional.
+  needs:
+    - claude-review
+  rules:
+    - if: $HAC_CLAUDE_COMPANION_REVIEW == "true" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: always
+    - if: $HAC_CLAUDE_COMPANION_REVIEW == "true" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      when: delayed
+      start_in: 60 seconds
+  script:
+    - chmod +x .gitlab/scripts/claude-review.sh
+    - REVIEW_MODEL=databricks-claude-sonnet-4-6 HAC_REVIEWER_ID=claude-companion HAC_REVIEW_AUTO_FIX=false HAC_REVIEW_INCLUDE_LEGACY_THREADS=false .gitlab/scripts/claude-review.sh
+
+claude-respond:
+  extends: .hac-claude-respond

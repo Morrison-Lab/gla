@@ -1,0 +1,59 @@
+# HACtions: Documentation check template
+# Include this in your .gitlab-ci.yml to verify roxygen2 docs are up to date.
+#
+# Fails if `roxygen2::roxygenise()` produces changes to man/, NAMESPACE,
+# or DESCRIPTION that weren't committed.
+
+.hac-docs-check:
+  stage: docs
+  variables:
+    HAC_DEP_MANAGER: "pak"
+    # HAC_R_LIBS_USER is used in cache paths below. R_LIBS_USER is the variable
+    # R actually reads. Both MUST stay identical — if one changes, update the other.
+    HAC_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+    # R_LIBS_USER ensures R subprocesses find packages in the cached location.
+    # Set directly (not via HAC_R_LIBS_USER) — GitLab intra-block expansion is unreliable.
+    R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+  except:
+    - gh-pages
+  script:
+    - mkdir -p "$R_LIBS_USER"
+    - |
+      if [[ "$HAC_DEP_MANAGER" == "renv" ]]; then
+        Rscript -e '
+          if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
+          source("renv/activate.R")
+          renv::restore()
+        '
+      fi
+    - |
+      Rscript -e '
+        if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
+        pak::pkg_install(c("roxygen2"), upgrade = FALSE)
+        pak::pak(pkg = ".", upgrade = FALSE, dependencies = TRUE)
+        roxygen2::roxygenise()
+      '
+    # Check for changed files
+    - |
+      git add --all
+      changes=$(git diff-index HEAD --name-only -- man/ NAMESPACE DESCRIPTION)
+      if [ -n "$changes" ]; then
+        echo "::error::Changes found after documenting."
+        git --no-pager diff
+        echo "$changes"
+        echo "Please update documentation using devtools::document() in R."
+        exit 1
+      else
+        echo "No changes found after documenting. ✓"
+        exit 0
+      fi
+  cache:
+    - key: cache-$CI_COMMIT_REF_SLUG
+      fallback_keys:
+        - cache-$CI_DEFAULT_BRANCH
+        - cache-default
+      paths:
+        - ${HAC_R_LIBS_USER}
+
+docs_check:
+  extends: .hac-docs-check

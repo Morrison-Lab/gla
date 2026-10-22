@@ -1,0 +1,26 @@
+# Runtime-fetched scripts (consumer repos only, not tracked in HACtions itself)
+# The CI bot fetches these into .gitlab/scripts/ at job runtime via the API.
+# They must NOT be committed to this repo — the canonical source is scripts/.
+.gitlab/scripts/
+
+# OS metadata
+.DS_Store
+
+# Editor swap files
+*.swp
+*.swo
+
+# Environment / secrets (local testing)
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Code Quality reports (local testing)
+gl-code-quality-report.json
+codequality.json
+

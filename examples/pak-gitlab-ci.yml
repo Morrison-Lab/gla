@@ -1,0 +1,60 @@
+# Example .gitlab-ci.yml for R packages using pak for dependency management
+# (e.g., a pak-based project)
+#
+# Copy this file to your repo as .gitlab-ci.yml and customize as needed.
+
+include:
+  - project: 'example-group/HACtions'
+    ref: main
+    file:
+      - '/templates/workflow.yml'
+      - '/templates/check-package.yml'
+      - '/templates/lint.yml'
+      - '/templates/check-new-line-breaks.yml'
+      - '/templates/test-coverage.yml'
+      - '/templates/docs-check.yml'
+      - '/templates/version-check.yml'
+      - '/templates/pkgdown.yml'
+      - '/templates/pkgdown-deploy.yml'
+      - '/templates/security.yml'
+      - '/templates/check-phi.yml'
+      # Uncomment to enable Claude AI review:
+      # - '/templates/claude.yml'
+
+image: rocker/verse:latest
+
+variables:
+  GIT_DEPTH: 10
+  # Dependency manager: "pak" (default) or "renv"
+  HAC_DEP_MANAGER: "pak"
+  # Library path for installed packages
+  HAC_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+  R_LIBS: "${CI_PROJECT_DIR}/ci/lib:${R_LIBS}"
+  R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+  # Lint settings
+  LINTR_ERROR_ON_LINT: "true"
+  # pkgdown settings
+  SITE_BY_BRANCH: "TRUE"
+  # Set to "true" if you have .qmd vignettes
+  HAC_PKGDOWN_INSTALL_QUARTO: "false"
+  # Security
+  SECRET_DETECTION_ENABLED: 'true'
+
+cache:
+  - key: cache-default
+    paths:
+      - ${HAC_R_LIBS_USER}
+
+stages:
+  - build
+  - secrets
+  - test
+  - lint
+  - docs
+  - version
+  - pkgdown
+  - pkgdown-move
+  - prepare-deploy
+  - deploy
+  # Uncomment if using claude.yml:
+  # - claude

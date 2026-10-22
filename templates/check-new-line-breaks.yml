@@ -1,0 +1,171 @@
+# HACtions: Semantic line breaks check template
+# Include this in your .gitlab-ci.yml to flag newly-added Markdown lines
+# packing more than one sentence or clause onto a single source line.
+#
+# Diff-scoped against the target branch or MR merge base: only newly-added lines
+# are checked, so pre-existing long lines are never reflagged.
+#
+# Produces a GitLab Code Quality report artifact.
+#
+# Configuration variables (optional):
+#   NLB_GLOBS:             Space-separated git pathspecs to check (default: "*.md")
+#   NLB_PATHS_IGNORE:      Comma- or newline-separated glob patterns to skip (e.g. "CHANGELOG.md,vendor/*")
+#   NLB_FAIL:              "true" to fail on violations (default: "true"); "false" for warn-only
+#   NLB_CLAUSE_BREAKS:     "true" (default) to also flag long lines with mid-line semicolons (SemBr rule 5)
+#   NLB_CLAUSE_MIN_LENGTH: Minimum visible line length before clause check applies (default: 80)
+#   NLB_BASE_REF:          Explicit git ref/SHA to diff against (auto-detected if unset)
+#   HAC_NLB_IMAGE:         Docker image for the job (default: "python:3-slim")
+#   HAC_HACTIONS_PROJECT_ID: Project ID of the HACtions repo (default set below)
+#   HAC_NLB_REF:           Commit SHA of HACtions to fetch the checker script from
+#   HAC_NLB_SHA256:        Expected SHA256 checksum of check-new-line-breaks.py
+
+# These are TOP-LEVEL rather than job-level on purpose. GitLab gives job-level
+# `variables:` precedence over the global block, so defining them on the job
+# would silently override anything a consumer sets in their own `variables:`
+# block -- which is exactly what the README tells them to do. Defined here, the
+# consumer's own file wins.
+variables:
+  HAC_NLB_IMAGE: "python:3-slim"
+  NLB_GLOBS: "*.md"
+  NLB_PATHS_IGNORE: ""
+  NLB_FAIL: "true"
+  NLB_CLAUSE_BREAKS: "true"
+  NLB_CLAUSE_MIN_LENGTH: "80"
+  NLB_CODEQUALITY_REPORT: "gl-code-quality-report.json"
+  HAC_HACTIONS_PROJECT_ID: "2058"
+  # Pinned commit SHA in HACtions to fetch check-new-line-breaks.py from.
+  # Pin to an immutable SHA, never a branch.
+  HAC_NLB_REF: "f315152a6254f7d891dfe925f1d70a184af9827e"
+  # Expected sha256 of check-new-line-breaks.py. Verified before the
+  # script runs. Set to "" to skip verification. MUST be updated whenever HAC_NLB_REF is.
+  HAC_NLB_SHA256: "ab8e7a6700963c59bfe041762112e41f969b727519b2e526d55e9f09ef26a3c9"
+
+.hac-check-new-line-breaks:
+  stage: lint
+  image: ${HAC_NLB_IMAGE}
+  variables:
+    GIT_STRATEGY: clone
+    GIT_CHECKOUT: "true"
+    GIT_DEPTH: 0
+  rules:
+    - if: $CI_COMMIT_BRANCH == "gh-pages"
+      when: never
+    - when: on_success
+  script:
+    # Ensure git, curl, and jq are available in minimal environments (Debian/Ubuntu, Alpine)
+    - |
+      if ! command -v git >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+        if command -v apt-get >/dev/null 2>&1; then
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get -o APT::Sandbox::User=root update -qq && apt-get install -y -qq git curl jq
+        elif command -v apk >/dev/null 2>&1; then
+          apk add --no-cache git curl jq
+        fi
+        for tool in git curl jq; do
+          command -v "$tool" >/dev/null 2>&1 || {
+            echo "ERROR: $tool was not installed; cannot continue." >&2
+            exit 1
+          }
+        done
+      fi
+    # Determine base ref for diff-scoping if not explicitly provided
+    - |
+      if [ -z "${NLB_BASE_REF:-}" ]; then
+        if [ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]; then
+          export NLB_BASE_REF="$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+        elif [ -n "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-}" ]; then
+          git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" >/dev/null 2>&1 || true
+          export NLB_BASE_REF="origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+        elif [ -n "${CI_COMMIT_REF_NAME:-}" ] && [ -n "${CI_DEFAULT_BRANCH:-}" ] && [ "$CI_COMMIT_REF_NAME" != "$CI_DEFAULT_BRANCH" ]; then
+          # Branch pipeline: query GitLab API for associated MR's target branch
+          AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN:-}"
+          if [ -n "${GITLAB_TOKEN:-}" ]; then
+            AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
+          fi
+          HTTP_RESPONSE=$(curl -sS -w "\n%{http_code}" --get --header "$AUTH_HEADER" \
+            --data-urlencode "source_branch=${CI_COMMIT_REF_NAME}" \
+            --data-urlencode "state=opened" \
+            "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests") || true
+          HTTP_BODY=$(printf '%s\n' "$HTTP_RESPONSE" | sed '$d')
+          HTTP_STATUS=$(printf '%s\n' "$HTTP_RESPONSE" | tail -n 1)
+          TARGET_BRANCH=""
+          if [ "$HTTP_STATUS" = "200" ]; then
+            COUNT=$(printf '%s\n' "$HTTP_BODY" | jq '. | length' 2>/dev/null || echo "0")
+            if [ "$COUNT" -eq 1 ]; then
+              TARGET_BRANCH=$(printf '%s' "$HTTP_BODY" | jq -r '.[0].target_branch // empty' 2>/dev/null || true)
+            elif [ "$COUNT" -gt 1 ]; then
+              echo "WARNING: Multiple open MRs found for source branch ${CI_COMMIT_REF_NAME}; falling back to ${CI_DEFAULT_BRANCH}." >&2
+              TARGET_BRANCH="$CI_DEFAULT_BRANCH"
+            fi
+          else
+            echo "WARNING: Failed to query merge requests (HTTP ${HTTP_STATUS:-000}); falling back to ${CI_DEFAULT_BRANCH}." >&2
+          fi
+          if [ -z "$TARGET_BRANCH" ]; then
+            TARGET_BRANCH="$CI_DEFAULT_BRANCH"
+          fi
+          fetch_ok=1
+          git fetch --quiet origin \
+            "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}" || {
+            fetch_ok=0
+            echo "WARNING: could not fetch ${TARGET_BRANCH}; skipping check." >&2
+          }
+          if [ "$fetch_ok" -eq 1 ] && git rev-parse --verify --quiet "origin/${TARGET_BRANCH}" >/dev/null; then
+            export NLB_BASE_REF="origin/${TARGET_BRANCH}"
+          else
+            export NLB_BASE_REF=""
+          fi
+        else
+          export NLB_BASE_REF=""
+        fi
+      fi
+    # Locate or fetch check-new-line-breaks.py
+    - |
+      set -eu
+      SCRIPT_PATH=""
+      if [ -f ".gitlab/scripts/check-new-line-breaks.py" ]; then
+        SCRIPT_PATH=".gitlab/scripts/check-new-line-breaks.py"
+      else
+        AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN:-}"
+        if [ -n "${GITLAB_TOKEN:-}" ]; then
+          AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
+        fi
+        TARGET_REF="${HAC_NLB_REF:-${HAC_HACTIONS_REF:-166525262340b33653cf7d2477e06456a76ac210}}"
+        SCRIPT_BASE="${CI_API_V4_URL}/projects/${HAC_HACTIONS_PROJECT_ID}/repository/files/scripts%2Fcheck-new-line-breaks%2Epy/raw"
+        HTTP_CODE=$(curl -sS -w '%{http_code}' --get --header "$AUTH_HEADER" \
+          --data-urlencode "ref=${TARGET_REF}" \
+          "$SCRIPT_BASE" -o .hac-check-new-line-breaks.py) || true
+        HTTP_CODE="${HTTP_CODE:-000}"
+        case "$HTTP_CODE" in
+          2[0-9][0-9]) ;;
+          *)
+            echo "ERROR: Failed to fetch check-new-line-breaks.py from HACtions (HTTP $HTTP_CODE)" >&2
+            echo "  URL: $SCRIPT_BASE?ref=$TARGET_REF" >&2
+            exit 1
+            ;;
+        esac
+        if [ -n "${HAC_NLB_SHA256:-}" ]; then
+          ACTUAL_SHA="$(sha256sum .hac-check-new-line-breaks.py | awk '{print $1}')"
+          if [ "$ACTUAL_SHA" != "$HAC_NLB_SHA256" ]; then
+            echo "ERROR: check-new-line-breaks.py checksum mismatch!" >&2
+            echo "  expected: $HAC_NLB_SHA256" >&2
+            echo "  actual:   $ACTUAL_SHA" >&2
+            echo "  If HAC_NLB_REF was bumped, update HAC_NLB_SHA256 to match." >&2
+            exit 1
+          fi
+          echo "check-new-line-breaks.py checksum verified."
+        else
+          echo "WARNING: HAC_NLB_SHA256 is empty; executing check-new-line-breaks.py unverified." >&2
+        fi
+        SCRIPT_PATH=".hac-check-new-line-breaks.py"
+      fi
+      python3 "$SCRIPT_PATH"
+  after_script:
+    - rm -f .hac-check-new-line-breaks.py
+  artifacts:
+    when: always
+    reports:
+      codequality:
+        - ${NLB_CODEQUALITY_REPORT}
+
+check-new-line-breaks:
+  extends: .hac-check-new-line-breaks

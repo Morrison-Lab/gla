@@ -1,0 +1,43 @@
+# HACtions: Workflow rules template
+# Include this in your .gitlab-ci.yml to prevent duplicate pipelines.
+#
+# IMPORTANT: GitLab allows only ONE top-level `workflow:` block per assembled
+# pipeline. Do not define your own `workflow:` block when including this template.
+#
+# Without this, GitLab creates BOTH a branch pipeline AND a merge request
+# pipeline on every push when an MR is open — doubling resource usage.
+#
+# This template ensures:
+#   - Trigger pipelines always run (for @claude webhook responses)
+#   - Scheduled pipelines always run
+#   - Tag pipelines always run (for tagged releases)
+#   - When an MR exists, only the branch pipeline runs (not the MR detached pipeline)
+#   - Branch pipelines run normally when no MR is open
+#
+# Implications of suppressing MR-event pipelines:
+#   - CI_MERGE_REQUEST_* variables are NOT available in branch pipelines.
+#     Jobs needing MR context (labels, target branch, etc.) must query the
+#     GitLab API instead (see version-check.yml for an example).
+#   - GitLab's "Pipelines must succeed" merge setting still works — it gates
+#     on the *latest pipeline for the source branch*, which includes branch
+#     pipelines. See: https://docs.gitlab.com/ee/ci/pipelines/merge_request_pipelines.html
+
+workflow:
+  rules:
+    # Always run trigger pipelines (claude webhook)
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    # Always run scheduled pipelines
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    # Always run tag pipelines (tagged releases)
+    - if: $CI_COMMIT_TAG
+    # Skip MR-event pipelines — we use branch pipelines instead.
+    # All HACtions templates (including claude.yml) use branch-pipeline rules
+    # with $CI_OPEN_MERGE_REQUESTS for MR-aware jobs, so suppressing
+    # MR-event pipelines does not disable any jobs.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    # Run branch pipelines (covers push, web, api, and other sources that set CI_COMMIT_BRANCH)
+    - if: $CI_COMMIT_BRANCH
+    # Note: pipeline sources without CI_COMMIT_BRANCH (e.g., parent_pipeline for
+    # multi-project child pipelines) are implicitly excluded. If your project uses
+    # child pipelines, add an explicit rule for $CI_PIPELINE_SOURCE == "parent_pipeline".

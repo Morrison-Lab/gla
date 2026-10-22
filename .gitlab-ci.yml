@@ -1,0 +1,188 @@
+# HACtions dogfooding: use our own Claude integration template
+#
+# Required CI/CD Variables (Settings > CI/CD > Variables):
+#   ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN — Databricks PAT
+#   ANTHROPIC_BASE_URL — Databricks serving endpoint URL
+#   GITLAB_TOKEN — Project access token with api + write_repository scope
+#
+# Setup:
+#   1. Create a Pipeline Trigger Token (Settings > CI/CD > Pipeline triggers)
+#   2. Create a Webhook (Settings > Webhooks):
+#      URL: https://gitlab.example.com/api/v4/projects/<project-id>/ref/main/trigger/pipeline?token=<TRIGGER_TOKEN>
+#      Trigger: "Note events" only
+#   3. Set the CI/CD variables listed above
+
+stages:
+  - lint
+  - secrets
+  - claude
+
+include:
+  - local: templates/workflow.yml
+  - local: templates/check-new-line-breaks.yml
+  - local: templates/claude.yml
+  - local: templates/agent-review.yml
+  # Dogfooding: run our own PHI template against this repo.
+  - local: templates/check-phi.yml
+
+# Run the bats suite. Without this the tests are only ever run by hand, so a
+# regression in (for example) check-phi.yml's pinned SHA would reach main
+# unnoticed -- a test that nothing runs is not a check.
+bats-tests:
+  stage: lint
+  variables:
+    GIT_DEPTH: 0
+  # Not the bats/bats image: it is Alpine and carries neither jq nor git, and
+  # 28 of the 105 tests shell out to one or the other. They fail with exit 127
+  # ("command not found"), which reads as a broken test rather than a missing
+  # dependency, so the image choice is load-bearing.
+  image: ubuntu:24.04
+  needs: []
+  interruptible: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == "gh-pages"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH
+  before_script:
+    - |
+      set -eu
+      # See claude.yml for why the apt sandbox is disabled: where the _apt user
+      # cannot run gpgv, every index is rejected as unsigned.
+      apt-get -o APT::Sandbox::User=root update -qq
+      # ruby is not incidental: version_check_auth_header.bats and
+      # reviewer_model_selection.bats use `ruby -ryaml` to pull a script block
+      # out of a template, so without it four tests fail in setup().
+      apt-get install -y -qq --no-install-recommends bats jq git ruby ca-certificates
+      # apt-get update exits 0 even when every index fails to download, so check
+      # the tools directly rather than trusting the exit status above.
+      for tool in bats jq git ruby; do
+        command -v "$tool" >/dev/null 2>&1 || {
+          echo "ERROR: $tool was not installed; cannot continue." >&2
+          exit 1
+        }
+      done
+      ruby -ryaml -e 'exit 0' || {
+        echo "ERROR: ruby is present but its yaml stdlib is not loadable." >&2
+        exit 1
+      }
+      # git_add_scope_exclusion.bats builds throwaway repos and commits in them,
+      # which needs an identity and a deterministic default branch name.
+      git config --global user.email "ci@hactions.invalid"
+      git config --global user.name "HACtions CI"
+      git config --global init.defaultBranch main
+  script:
+    - bats --print-output-on-failure tests/lib/
+
+# Run unit tests for check-new-line-breaks
+test-check-new-line-breaks:
+  stage: lint
+  image: python:3-slim
+  needs: []
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1
+  script:
+    - python3 -m unittest discover -s tests -p "test_*.py"
+
+
+# Verify the LIB_FILES list in templates/claude.yml stays in sync with scripts/lib/
+check-lib-files-sync:
+  stage: lint
+  image: alpine:3.20
+  script:
+    - |
+      # Extract LIB_FILES from template (match only the assignment line, not comments)
+      TEMPLATE_LIST=$(sed -n 's/^[[:space:]]*LIB_FILES="\([^"]*\)".*/\1/p' templates/claude.yml | tr ' ' '\n' | sort)
+      if [ -z "$TEMPLATE_LIST" ]; then
+        echo "❌ Could not parse LIB_FILES from templates/claude.yml"
+        exit 1
+      fi
+      # List actual lib files
+      ACTUAL_LIST=$(ls scripts/lib/*.sh | xargs -n1 basename | sort)
+      if [ -z "$ACTUAL_LIST" ]; then
+        echo "❌ No .sh files found in scripts/lib/"
+        exit 1
+      fi
+      if [ "$TEMPLATE_LIST" != "$ACTUAL_LIST" ]; then
+        echo "❌ LIB_FILES in templates/claude.yml is out of sync with scripts/lib/"
+        echo ""
+        echo "Template lists:"
+        echo "$TEMPLATE_LIST"
+        echo ""
+        echo "Actual files:"
+        echo "$ACTUAL_LIST"
+        echo ""
+        # Use temp files instead of process substitution (ash/BusyBox compatible)
+        echo "$TEMPLATE_LIST" > /tmp/template_list.txt
+        echo "$ACTUAL_LIST" > /tmp/actual_list.txt
+        echo "Missing from template (exist on disk but not in LIB_FILES):"
+        grep -vxF -f /tmp/template_list.txt /tmp/actual_list.txt || true
+        echo "Extra in template (in LIB_FILES but not on disk):"
+        grep -vxF -f /tmp/actual_list.txt /tmp/template_list.txt || true
+        exit 1
+      fi
+      echo "✅ LIB_FILES is in sync with scripts/lib/ ($(echo "$ACTUAL_LIST" | wc -l) modules)"
+    - |
+      # Verify review job's lib dependencies exist on disk.
+      # The .hac-claude-review template fetches these files; if they're renamed
+      # or removed, the review job silently breaks for consumer repos.
+      REVIEW_LIBS="gitlab-api.sh select-author-response.sh select-review-note.sh validate-nonnegative-integer.sh format-review-comment.sh review-tools.sh"
+      for lib in $REVIEW_LIBS; do
+        if [ ! -f "scripts/lib/$lib" ]; then
+          echo "❌ Review job dependency scripts/lib/$lib does not exist"
+          exit 1
+        fi
+      done
+      echo "✅ Review job lib dependencies verified ($REVIEW_LIBS)"
+
+# Override to use local scripts directly (since this IS the HACtions repo)
+claude-review:
+  extends: .hac-claude-review
+  variables:
+    CLAUDE_SELF_REVIEW: "true"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq curl git jq > /dev/null 2>&1
+    - mkdir -p .gitlab/scripts/lib
+    - cp scripts/claude-review.sh .gitlab/scripts/
+    - cp scripts/lib/*.sh .gitlab/scripts/lib/
+
+# The companion must also use this branch's local scripts. Without this
+# override, the inherited fetch path downloads HAC_HACTIONS_REF (normally main)
+# and cannot dogfood companion changes made by the MR under review.
+claude-companion-review:
+  extends: .hac-claude-review
+  variables:
+    CLAUDE_SELF_REVIEW: "true"
+  needs:
+    - claude-review
+  rules:
+    - if: $HAC_CLAUDE_COMPANION_REVIEW == "true" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: always
+    - if: $HAC_CLAUDE_COMPANION_REVIEW == "true" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      when: delayed
+      start_in: 60 seconds
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq curl git jq > /dev/null 2>&1
+    - mkdir -p .gitlab/scripts/lib
+    - cp scripts/claude-review.sh .gitlab/scripts/
+    - cp scripts/lib/*.sh .gitlab/scripts/lib/
+  script:
+    - chmod +x .gitlab/scripts/claude-review.sh
+    - REVIEW_MODEL=databricks-claude-sonnet-4-6 HAC_REVIEWER_ID=claude-companion HAC_REVIEW_AUTO_FIX=false HAC_REVIEW_INCLUDE_LEGACY_THREADS=false .gitlab/scripts/claude-review.sh
+
+claude-respond:
+  extends: .hac-claude-respond
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq curl git jq findutils perl > /dev/null 2>&1
+    - |
+      if [[ -n "${TRIGGER_PAYLOAD_JSON:-}" ]]; then
+        export TRIGGER_PAYLOAD="/tmp/trigger_payload.json"
+        echo "$TRIGGER_PAYLOAD_JSON" > "$TRIGGER_PAYLOAD"
+        echo "Reconstructed TRIGGER_PAYLOAD from TRIGGER_PAYLOAD_JSON variable (self-iteration)."
+      fi
+    - mkdir -p .gitlab/scripts/lib && cp scripts/claude-respond.sh .gitlab/scripts/ && cp scripts/lib/*.sh .gitlab/scripts/lib/
+
+check-new-line-breaks:
+  extends: .hac-check-new-line-breaks
+  before_script:
+    - mkdir -p .gitlab/scripts && cp scripts/check-new-line-breaks.py .gitlab/scripts/

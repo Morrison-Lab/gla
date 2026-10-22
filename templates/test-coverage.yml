@@ -1,0 +1,52 @@
+# HACtions: Test coverage template
+# Include this in your .gitlab-ci.yml to run covr and produce coverage reports.
+#
+# Optional variables:
+#   HAC_COVERAGE_ALLOW_FAILURE: "true" to allow coverage job to fail (default: "true")
+
+.hac-test-coverage:
+  stage: test
+  variables:
+    HAC_DEP_MANAGER: "pak"
+    HAC_COVERAGE_ALLOW_FAILURE: "true"
+    # HAC_R_LIBS_USER is used in cache paths below. R_LIBS_USER is the variable
+    # R actually reads. Both MUST stay identical — if one changes, update the other.
+    HAC_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+    # R_LIBS_USER ensures R subprocesses find packages in the cached location.
+    # Set directly (not via HAC_R_LIBS_USER) — GitLab intra-block expansion is unreliable.
+    R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+  except:
+    - gh-pages
+  allow_failure: true
+  script:
+    - mkdir -p "$R_LIBS_USER"
+    - |
+      if [[ "$HAC_DEP_MANAGER" == "renv" ]]; then
+        Rscript -e '
+          if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
+          source("renv/activate.R")
+          renv::restore()
+        '
+      fi
+    - |
+      Rscript -e '
+        if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
+        pak::pkg_install(pkg = c("covr", "DT"), upgrade = FALSE)
+        pak::pak(pkg = ".", upgrade = FALSE, dependencies = TRUE)
+      '
+    - Rscript -e 'covr::gitlab(quiet = FALSE)'
+  coverage: '/Coverage: \d+\.\d+/'
+  cache:
+    - key: cache-$CI_COMMIT_REF_SLUG
+      fallback_keys:
+        - cache-$CI_DEFAULT_BRANCH
+        - cache-default
+      paths:
+        - ${HAC_R_LIBS_USER}
+  artifacts:
+    paths:
+      - public
+    expire_in: 30 days
+
+test_coverage:
+  extends: .hac-test-coverage

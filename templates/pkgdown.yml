@@ -1,0 +1,64 @@
+# HACtions: pkgdown build template
+# Include this in your .gitlab-ci.yml to build a pkgdown documentation site.
+#
+# Optional variables:
+#   HAC_PKGDOWN_INSTALL_QUARTO: "true" to install quarto (for .qmd vignettes)
+
+.hac-pkgdown:
+  stage: pkgdown
+  variables:
+    HAC_DEP_MANAGER: "pak"
+    HAC_PKGDOWN_INSTALL_QUARTO: "false"
+    # HAC_R_LIBS_USER is used in cache paths below. R_LIBS_USER is the variable
+    # R actually reads. Both MUST stay identical — if one changes, update the other.
+    HAC_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+    # R_LIBS_USER ensures R subprocesses find packages in the cached location.
+    # Set directly (not via HAC_R_LIBS_USER) — GitLab intra-block expansion is unreliable.
+    R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+  except:
+    - gh-pages
+  allow_failure: false
+  when: on_success
+  script:
+    - mkdir -p "$R_LIBS_USER"
+    # Optionally install quarto for .qmd vignettes
+    - |
+      if [[ "$HAC_PKGDOWN_INSTALL_QUARTO" == "true" ]]; then
+        curl -LO https://quarto.org/download/latest/quarto-linux-amd64.deb
+        apt-get update -qq && apt-get install -y -qq ./quarto-linux-amd64.deb > /dev/null 2>&1
+      fi
+    # Restore dependencies
+    - |
+      if [[ "$HAC_DEP_MANAGER" == "renv" ]]; then
+        Rscript -e '
+          if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
+          source("renv/activate.R")
+          renv::restore()
+        '
+      fi
+    - |
+      Rscript -e '
+        if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
+        pak::pkg_install(c("pkgdown"), upgrade = FALSE)
+        pak::pak(pkg = ".", upgrade = FALSE, dependencies = TRUE)
+      '
+    # Install quarto R package if needed
+    - |
+      if [[ "$HAC_PKGDOWN_INSTALL_QUARTO" == "true" ]]; then
+        Rscript -e 'pak::pkg_install("quarto", upgrade = FALSE)'
+      fi
+    - Rscript -e 'pkgdown::build_site()'
+  cache:
+    - key: cache-$CI_COMMIT_REF_SLUG
+      fallback_keys:
+        - cache-$CI_DEFAULT_BRANCH
+        - cache-default
+      paths:
+        - ${HAC_R_LIBS_USER}
+  artifacts:
+    paths:
+      - docs
+    expire_in: 30 days
+
+integration:
+  extends: .hac-pkgdown

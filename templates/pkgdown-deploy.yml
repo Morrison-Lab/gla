@@ -1,0 +1,113 @@
+# HACtions: pkgdown multi-branch deployment template
+# Include this in your .gitlab-ci.yml to deploy pkgdown sites per branch.
+#
+# This handles the branch-specific deployment pattern:
+#   - test-ci → public/test
+#   - production → public/production
+#   - main/master → public/ (root)
+#   - gh-pages-prep → pushes to gh-pages branch
+#   - pages → deploys gh-pages artifacts
+#
+# Optional variables:
+#   SITE_BY_BRANCH: "TRUE" to deploy per-branch sites (default: "TRUE")
+
+.hac-integration-test:
+  stage: pkgdown-move
+  dependencies:
+    - integration
+  only:
+    - test-ci
+  script:
+    - mkdir -p public/test
+    - 'curl --location --output artifacts.zip --header "JOB-TOKEN: $CI_JOB_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/artifacts/$CI_DEFAULT_BRANCH/download?job=pages" &&
+      unzip artifacts.zip &&
+      rm artifacts.zip &&
+      echo "copied $CI_DEFAULT_BRANCH artifacts" ||
+      echo "copied $CI_DEFAULT_BRANCH artifacts failed"'
+    - 'curl --location --output artifacts.zip --header "JOB-TOKEN: $CI_JOB_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/artifacts/production/download?job=pages" &&
+      unzip artifacts.zip &&
+      rm artifacts.zip &&
+      echo "copied production artifacts" ||
+      echo "copied production artifacts failed"'
+    - cp -r docs/* public/test
+  artifacts:
+    paths:
+      - public
+    expire_in: 30 days
+
+.hac-integration-production:
+  stage: pkgdown-move
+  dependencies:
+    - integration
+  only:
+    - production
+  script:
+    - mkdir -p public/production
+    - 'curl --location --output artifacts.zip --header "JOB-TOKEN: $CI_JOB_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/artifacts/$CI_DEFAULT_BRANCH/download?job=pages" &&
+      unzip artifacts.zip &&
+      rm artifacts.zip &&
+      echo "copied $CI_DEFAULT_BRANCH artifacts" ||
+      echo "copied $CI_DEFAULT_BRANCH artifacts failed"'
+    - cp -r docs/* public/production
+  artifacts:
+    paths:
+      - public
+    expire_in: 30 days
+
+.hac-integration-main:
+  stage: pkgdown-move
+  dependencies:
+    - integration
+  only:
+    - main
+    - master
+  script:
+    - mkdir -p public
+    - 'curl --location --output artifacts.zip --header "JOB-TOKEN: $CI_JOB_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/artifacts/production/download?job=pages" &&
+      unzip artifacts.zip &&
+      rm artifacts.zip &&
+      echo "copied production artifacts" ||
+      echo "copied production artifacts failed"'
+    - cp -r docs/* public
+  artifacts:
+    paths:
+      - public
+    expire_in: 30 days
+
+.hac-gh-pages-prep:
+  stage: prepare-deploy
+  variables:
+    SITE_BY_BRANCH: "TRUE"
+  only:
+    - master
+    - main
+    - production
+    - validation
+  script:
+    - wget https://raw.githubusercontent.com/statnmap/GitLab-Pages-Deploy/main/deploy_pages_branch.sh
+    - /bin/bash deploy_pages_branch.sh
+
+.hac-pages:
+  stage: deploy
+  script:
+    - echo "deploy"
+  artifacts:
+    paths:
+      - public
+  only:
+    - gh-pages
+
+integration-test:
+  extends: .hac-integration-test
+
+integration-production:
+  extends: .hac-integration-production
+
+integration-main:
+  extends: .hac-integration-main
+
+gh-pages-prep:
+  extends: .hac-gh-pages-prep
+
+pages:
+  extends: .hac-pages

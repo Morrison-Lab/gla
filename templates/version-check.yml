@@ -1,0 +1,126 @@
+# HACtions: Version check template
+# Include this in your .gitlab-ci.yml to ensure DESCRIPTION version is bumped
+# relative to the default branch on every MR.
+#
+# Skipped on the default branch itself, gh-pages, and when the associated MR
+# has a recognized skip label (for documentation-only or CI-only changes).
+#
+# Default skip labels: "no-version-bump", "no version increment"
+# Repos can override by setting HAC_VERSION_SKIP_LABELS in their .gitlab-ci.yml
+# variables block (comma-separated list of label names).
+
+.hac-version-check:
+  stage: version
+  variables:
+    HAC_DEP_MANAGER: "pak"
+    # Comma-separated list of MR labels that skip the version check.
+    # Override in your repo's .gitlab-ci.yml to add custom labels.
+    HAC_VERSION_SKIP_LABELS: "no-version-bump,no version increment"
+    # HAC_R_LIBS_USER is used in cache paths below. R_LIBS_USER is the variable
+    # R actually reads. Both MUST stay identical — if one changes, update the other.
+    HAC_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+    # R_LIBS_USER ensures R subprocesses find packages in the cached location.
+    # Set directly (not via HAC_R_LIBS_USER) — GitLab intra-block expansion is unreliable.
+    R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+  # NOTE: Required tools: jq (for API JSON parsing), git (for fetch/show),
+  # curl (for API calls). These are present in rocker/verse but may be missing
+  # in minimal images. The jq dependency check is in `script` (not before_script)
+  # so it runs even if a consuming job overrides before_script.
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
+    - if: $CI_COMMIT_BRANCH == "gh-pages"
+      when: never
+    # Static rules check for the two built-in labels (covers MR pipelines).
+    # The script-level check below handles the full configurable list for
+    # branch pipelines and any additional labels repos add via HAC_VERSION_SKIP_LABELS.
+    # These two static rules always apply, even if a repo overrides
+    # HAC_VERSION_SKIP_LABELS to a set that excludes them: GitLab's static
+    # rules can't read a variable's value dynamically, so a repo that intends
+    # to *replace* the defaults will still see the job skipped by either label.
+    - if: $CI_MERGE_REQUEST_LABELS =~ /no-version-bump/
+      when: never
+    - if: $CI_MERGE_REQUEST_LABELS =~ /no version increment/
+      when: never
+    - when: on_success
+  script:
+    - mkdir -p "$R_LIBS_USER"
+    # Ensure jq is available (needed for GitLab API JSON parsing below).
+    # Placed in script (not before_script) so it survives consumer overrides.
+    # Assumes a Debian/Ubuntu base image running as root (e.g., rocker/verse).
+    - |
+      if ! command -v jq >/dev/null 2>&1; then
+        echo "jq not found — installing..."
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq && apt-get install -y -qq jq \
+          || { echo "ERROR: Failed to install jq. Ensure this is a Debian-based image running as root, or pre-install jq." >&2; exit 1; }
+        echo "jq installed successfully."
+      fi
+    # Check for skip labels on associated MR (works for branch pipelines too).
+    # Uses the configurable HAC_VERSION_SKIP_LABELS variable (comma-separated).
+    - |
+      if [[ -n "${GITLAB_TOKEN:-}" ]]; then
+        AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
+      else
+        AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN:-}"
+      fi
+      if [ -n "${CI_MERGE_REQUEST_IID:-}" ]; then
+        MR_IID="$CI_MERGE_REQUEST_IID"
+      else
+        MR_IID=$(curl -sf --header "$AUTH_HEADER" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests?source_branch=${CI_COMMIT_REF_NAME}&state=opened" \
+          | jq -r '.[0].iid // empty' || true)
+      fi
+      if [ -n "$MR_IID" ]; then
+        if ! MR_JSON=$(curl -sf --header "$AUTH_HEADER" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${MR_IID}"); then
+          # Fail open: if the label lookup itself fails (bad token, network
+          # issue), proceed with the version check rather than skip it silently.
+          echo "WARNING: Failed to fetch MR !${MR_IID} labels from the GitLab API; proceeding with version check." >&2
+          LABELS=""
+        else
+          LABELS=$(echo "$MR_JSON" | jq -r '.labels[]' 2>/dev/null || true)
+        fi
+        IFS=',' read -ra SKIP_LABELS <<< "$HAC_VERSION_SKIP_LABELS"
+        for skip_label in "${SKIP_LABELS[@]}"; do
+          # Trim leading/trailing whitespace from the configured label
+          skip_label=$(echo "$skip_label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          # A trailing comma in HAC_VERSION_SKIP_LABELS yields an empty element here;
+          # grep -qxF "" would match any line in $LABELS and skip the check for every MR.
+          [ -z "$skip_label" ] && continue
+          if echo "$LABELS" | grep -qxF "$skip_label"; then
+            echo "Skipping version check: MR !${MR_IID} has '${skip_label}' label."
+            exit 0
+          fi
+        done
+      fi
+    - git fetch origin $CI_DEFAULT_BRANCH
+    - git show origin/${CI_DEFAULT_BRANCH}:DESCRIPTION > olddesc.txt
+    - |
+      Rscript -e "
+        if (!requireNamespace('desc', quietly = TRUE)) install.packages('desc')
+        old_version <- desc::desc_get_version('olddesc.txt')
+        new_version <- desc::desc_get_version('DESCRIPTION')
+        message('Version on ', Sys.getenv('CI_DEFAULT_BRANCH'), ': ', old_version)
+        message('Version on this branch: ', new_version)
+        if (new_version <= old_version) {
+          stop(
+            'Package version has not been bumped!\n',
+            'Current branch: ', new_version, '\n',
+            Sys.getenv('CI_DEFAULT_BRANCH'), ': ', old_version, '\n',
+            'Please increment the version in DESCRIPTION.',
+            call. = FALSE
+          )
+        }
+        message('Version check passed.')
+      "
+  cache:
+    - key: cache-$CI_COMMIT_REF_SLUG
+      fallback_keys:
+        - cache-$CI_DEFAULT_BRANCH
+        - cache-default
+      paths:
+        - ${HAC_R_LIBS_USER}
+
+version-check:
+  extends: .hac-version-check

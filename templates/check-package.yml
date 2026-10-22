@@ -1,0 +1,66 @@
+# HACtions: R CMD check template
+# Include this in your .gitlab-ci.yml to run R CMD check on your package.
+#
+# Required variables (set in your .gitlab-ci.yml or CI/CD settings):
+#   HAC_DEP_MANAGER: "pak" or "renv" (default: "pak")
+#
+# Optional variables:
+#   HAC_CHECK_ARGS: extra args for R CMD check (default: "--no-manual")
+#   HAC_CHECK_ERROR_ON: rcmdcheck error level (default: "warning")
+
+.hac-check-package:
+  stage: build
+  variables:
+    HAC_DEP_MANAGER: "pak"
+    HAC_CHECK_ARGS: "--no-manual"
+    HAC_CHECK_ERROR_ON: "warning"
+    # HAC_R_LIBS_USER is used in cache paths below. R_LIBS_USER is the variable
+    # R actually reads. Both MUST stay identical — if one changes, update the other.
+    HAC_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+    # R_LIBS_USER ensures R subprocesses find packages in the cached location.
+    # Set directly (not via HAC_R_LIBS_USER) — GitLab intra-block expansion is unreliable.
+    R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+  except:
+    - gh-pages
+  script:
+    - R -e "sessionInfo()"
+    - |
+      if [[ $CI_DEFAULT_BRANCH == "master" || $CI_DEFAULT_BRANCH == "main" ]]; then
+        echo "OK - Default branch is $CI_DEFAULT_BRANCH"
+      else
+        echo "Default branch is $CI_DEFAULT_BRANCH; please verify this is correct."
+      fi
+    - echo "Library path for packages:" "$R_LIBS_USER"
+    - mkdir -p "$R_LIBS_USER"
+    # Install dependencies based on chosen manager
+    - |
+      if [[ "$HAC_DEP_MANAGER" == "renv" ]]; then
+        Rscript -e '
+          if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
+          source("renv/activate.R")
+          renv::restore()
+          renv::install("rcmdcheck", upgrade = FALSE)
+          renv::install(".", dependencies = TRUE)
+        '
+      else
+        Rscript -e '
+          if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
+          pak::pak(pkg = ".", upgrade = TRUE, dependencies = TRUE)
+          pak::pkg_install("rcmdcheck", upgrade = TRUE)
+        '
+      fi
+    - Rscript -e "rcmdcheck::rcmdcheck(args = c('${HAC_CHECK_ARGS}'), error_on = '${HAC_CHECK_ERROR_ON}', check_dir = 'check')"
+  cache:
+    - key: cache-$CI_COMMIT_REF_SLUG
+      fallback_keys:
+        - cache-$CI_DEFAULT_BRANCH
+        - cache-default
+      paths:
+        - ${HAC_R_LIBS_USER}
+  artifacts:
+    paths:
+      - check
+    expire_in: 30 days
+
+check-package:
+  extends: .hac-check-package
