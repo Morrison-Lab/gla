@@ -1,0 +1,648 @@
+# Caller for Morrison-Lab/gha's reusable Claude PR review workflow.
+# Automatic reviews run on in-repo PR opens, updates, reopens and draft->ready
+# transitions. Two callee-side conditions skip a review here:
+#
+# - A DRAFT PR. Every review job requires `pull_request.draft == false`, so a
+#   PR opened as a draft is reviewed only once it is marked ready.
+# - A push by a BOT sender. Every review job requires
+#   `sender.type != 'Bot'`, so an agent's push under a bot identity, including
+#   a `claude[bot]` remote session, is not reviewed automatically.
+#
+# A PR that edits `.github/workflows/*.yml` IS reviewed here, against the
+# default branch's workflow YAML rather than against its own. The callee first
+# replaces the PR-head workflow tree with the default branch's copy (gha#598),
+# and that restore needs only that `main` carry a `.github/workflows` tree,
+# which it has since fe082bf (2026-09-15). gha#904 is what happens when a
+# default branch carries no such tree at all; it names this repository as the
+# sibling where the restore worked, and `Morrison-Lab/mlg#5` as the one where
+# it did not. gha#914 fixed that upstream on 2026-09-23 by treating an absent
+# tree as an empty trusted state, so a consumer picks the fix up once `@v2`
+# slides past that merge and not before --- but neither the bug nor the fix
+# changes anything here, because the restore already succeeds. Do not re-add a
+# workflow edit to the skip list above; an earlier revision of this comment had
+# it there, and it was wrong.
+#
+# Three ways to start a review, so a skip on one path is not a dead end:
+#
+# - `pull_request` events, subject to the skips above.
+# - `workflow_dispatch` with a `pr_number`, for explicit redispatches from
+#   claude-bot.yml.
+# - a `/review` comment on a PR, handled by the dispatch-on-comment job below.
+#   This is the only review-request route an agent session has, for the reason
+#   that job's own comment gives, and it is the route `Morrison-Lab/gha`'s
+#   CLAUDE.md prescribes in place of widening `allowed-bots`.
+#
+# NOTE: no top-level `concurrency:` block. The reusable workflow manages per-PR
+# concurrency on its own job; a PR-scoped group here deadlocks against it
+# (gha#437).
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull request number to review'
+        required: true
+        type: string
+
+jobs:
+  # A trusted author commenting `/review` at the start of a PR comment triggers
+  # an on-demand review of that PR, bypassing claude-bot.yml's @claude agent
+  # entirely. The tag is deliberately a slash command rather than an `@claude`
+  # mention: any `@claude` substring also wakes claude-bot.yml, so a slash
+  # command keeps this path independent of that agent.
+  #
+  # Rather than call the reusable workflow directly -- its jobs gate on
+  # workflow_dispatch / pull_request and would skip an issue_comment run --
+  # this re-enters the workflow_dispatch path below via `gh workflow run`,
+  # reusing the reusable workflow's tested dispatched-review flow unchanged.
+  # `gh workflow run` needs the workflow present on the default branch, so
+  # `/review` works once this file is merged there.
+  #
+  # Ported from Morrison-Lab/gha's own caller (`.github/workflows/claude-review.yml`
+  # on `main`, read 2026-09-23) rather than written here, so the two stay
+  # comparable.
+  dispatch-on-comment:
+    # OWNER/MEMBER/COLLABORATOR, or an allowlisted App login whose
+    # author_association is NONE: cursor[bot] (Cloud Agents post /review and
+    # @claude review under it) and claude[bot] (a Claude Code remote/web
+    # session, and its subagents, act under it).
+    #
+    # cursor[bot] is here because the allowlist is taken verbatim from gha's
+    # `main` (`["claude[bot]","cursor[bot]"]`), which Morrison-Lab/lds#42 asks
+    # for by name; a naive port from `gha@v2` would carry cursor[bot] ALONE and
+    # so miss the login this repository actually needs. No Cursor integration
+    # posts here today, so that arm currently admits nobody. It is not inert
+    # for free, though: this arm bypasses the OWNER/MEMBER/COLLABORATOR check
+    # entirely, so if Cursor is ever installed on this repository, any /review
+    # it emits would dispatch a job holding `actions: write` + `issues: write`
+    # + `pull-requests: read` with no association check in the path. That read
+    # scope belongs in the list rather than being waved through as the small
+    # one: this repository is private, so it is read of every PR's metadata
+    # and full changed-file set, and this PR is what adds it. Drop the entry
+    # rather than leaving it undocumented if that day is not wanted.
+    #
+    # claude[bot] is here because this is the ONLY review-request pathway such a
+    # session has. Its pushes carry `sender.type == 'Bot'`, which skips the
+    # automatic `pull_request` path; and a `workflow_dispatch` it issues itself
+    # starts a run that claude-code-action then short-circuits at zero cost,
+    # because `allowed-bots` admits `github-actions[bot]` and not `claude[bot]`.
+    # Derive that population rather than recalling it: `list_workflow_runs` on
+    # this file filtered to `event: workflow_dispatch`, read for
+    # `triggering_actor.login`. As of 2026-09-23 08:11 UTC it holds four
+    # claude[bot]-actored runs, and the one that breaks the pattern is the
+    # evidence for the paragraph below rather than against it.
+    #
+    # Three short-circuited. 35811344612, 35812077113 and 35835626477 each ran
+    # the caller from `main`, which passes no `allowed-bots`; the `Run Claude
+    # Code Review` step completed in three, three and four seconds having
+    # written no execution file, and `Resolve final review outcome` then failed
+    # the job.
+    #
+    # 35814789964 reviewed for nine minutes and posted. It ran the caller from
+    # `claude/project-thread-uskj3e` at 54c6b28, which passed
+    # `allowed-bots: 'github-actions[bot],claude'` -- the widening the next
+    # paragraph is about, tried on that branch and since removed. So the
+    # short-circuit is deterministic given the caller's own `allowed-bots`, and
+    # that run is the direct measurement of what widening it buys and costs.
+    #
+    # gha's own copy cites the same short-circuit on Morrison-Lab/ai-config
+    # (2026-09-18: 4 of 4 claude[bot] dispatches short-circuited, 4 of 4
+    # github-actions[bot] dispatches reviewed). The per-run figures for those
+    # short-circuits -- 35ms, zero cost -- are in gha's CLAUDE.md rather than
+    # in the caller, which states only the counts.
+    #
+    # The obvious repair is to widen `allowed-bots`, and that is the trap. It
+    # admits the actor into EVERY dispatched review rather than into the one
+    # path whose requester was checked, and `Morrison-Lab/gha`'s CLAUDE.md names
+    # it as the wrong fix. The dispatch below runs under GITHUB_TOKEN, so it
+    # re-enters as `github-actions[bot]` and clears both gates without widening
+    # either. Nothing this workflow posts begins with `/review`, so a review
+    # cannot re-enter this path.
+    #
+    # This gate lives entirely in the caller, so it takes effect on merge to
+    # the default branch without waiting for an @v2 slide.
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/review') &&
+      (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
+      contains(fromJSON('["claude[bot]","cursor[bot]"]'), github.event.comment.user.login))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write        # dispatch this workflow via `gh workflow run`
+      # Every notice this job posts goes through `gh api
+      # repos/OWNER/REPO/issues/N/comments` rather than `gh issue comment`,
+      # and this is the scope that route consumes. The two are not
+      # interchangeable: `gh issue comment` posts through the GraphQL
+      # `addComment` mutation, which GitHub authorizes against
+      # `pull_requests: write` on a pull request and refuses under the scopes
+      # below. No notice has reached a PR since this job was added: runs
+      # 36008707755 and 36020112896, 2026-09-24, both died with `GraphQL:
+      # Resource not accessible by integration (addComment)` on every notice
+      # including the backstop, and the first of those two was otherwise a
+      # SUCCESS -- it dispatched a review and told the PR nothing.
+      #
+      # The REST route answers `issues=write; pull_requests=write`, where a
+      # SEMICOLON separates ALTERNATIVE permission sets rather than listing
+      # co-requirements, so this scope alone satisfies it. That reading is not
+      # taken on trust: the step below reads `repos/.../pulls/N`, which answers
+      # `pull_requests=read; contents=read`, and it succeeds here under
+      # `pull-requests: read` with no `contents` at all.
+      issues: write         # acknowledge the /review comment
+      # Declaring this block sets every scope not listed to `none`. The step
+      # below reads `repos/.../pulls/N` and `.../pulls/N/files` to resolve the
+      # head branch and the changed-file set, and this repository is private,
+      # so both reads need a scope. Ported from gha's own caller, which grants
+      # neither -- a structure whose purpose did not transfer. Without this
+      # the `gh api repos/.../pulls/N` read fails, and the guard around that
+      # read posts a notice and exits 1, so no dispatch happens and the only
+      # review-request route an agent session has here is dead. Not a `set -e`
+      # death: that read is wrapped in `if ! PR_JSON=$(...)`, which suppresses
+      # errexit, so the failure reaches the PR rather than the run log alone.
+      # It is terminal either way, which is what this scope exists to prevent.
+      #
+      # `pull-requests` alone, deliberately. Measured against the live API on
+      # 2026-09-23: `.../pulls/N` answers `pull_requests=read; contents=read`
+      # and `.../pulls/N/files` answers `pull_requests=read`. A SEMICOLON in
+      # that header separates ALTERNATIVE permission sets rather than listing
+      # co-requirements -- a comma does that -- so the first endpoint takes
+      # either scope and the second takes only this one. Nothing else in the
+      # job wants `contents`: it runs no checkout, and its one `uses:` resolves
+      # `parse-workflow-ref` from the public `Morrison-Lab/gha`, which no scope
+      # on THIS repository governs. This job is reachable by `claude[bot]` and
+      # `cursor[bot]`, so a `contents` grant added for symmetry would hand a
+      # bot-triggered run read of the whole private source tree.
+      pull-requests: read
+    steps:
+      - name: Parse this workflow's ref
+        id: this-wf
+        uses: Morrison-Lab/gha/.github/actions/parse-workflow-ref@v2
+        with:
+          workflow-ref: ${{ github.workflow_ref }}
+
+      # gha's own classifier, called rather than copied. It lists the PR's
+      # changed files and reports whether any top-level `.github/workflows/*`
+      # YAML is among them, so this caller keeps no fork of a security
+      # classifier to drift out of step with the upstream one. It resolves at
+      # `@v2` like `parse-workflow-ref` above and needs no checkout, reaching
+      # its own scripts through `github.action_path`.
+      #
+      # `continue-on-error`, because a failure here must not redden the job
+      # before the step below can tell the PR anything --- the silent-thread
+      # state this job exists to get out of. The output is then empty, and the
+      # dispatch step treats anything but a literal `false` as a workflow edit,
+      # so the failure direction is the safe one.
+      - name: Classify whether this PR edits workflow YAML
+        id: wf-edits
+        continue-on-error: true
+        uses: Morrison-Lab/gha/.github/actions/detect-pr-workflow-edits@v2
+        with:
+          pr-number: ${{ github.event.issue.number }}
+          caller-workflow-path: ${{ steps.this-wf.outputs.path }}
+
+      - name: Dispatch a review for the commented PR
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          WF_PATH: ${{ steps.this-wf.outputs.path }}
+          # Passed via env, not inlined into the script, so the comment body is
+          # a shell value and never interpreted as script -- avoids injection.
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          WF_EDITS: ${{ steps.wf-edits.outputs.workflow_edits }}
+          # Read off the event payload, which every `issue_comment` delivery
+          # carries, so naming the default branch costs no API call and no
+          # scope. Omitting `--ref` instead does NOT come free: `gh workflow
+          # run` then resolves the default branch itself, through the GraphQL
+          # `repository.defaultBranchRef` field, which needs `contents: read`
+          # on a private repository. That scope is deliberately withheld here,
+          # so the fallback paths below died with `unable to determine default
+          # branch ... (repository.defaultBranchRef)` (run 36020112896,
+          # 2026-09-24). Passing the same branch explicitly dispatches the
+          # identical run without asking for the scope.
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          # Every notice below goes through this helper, which records on
+          # $GITHUB_OUTPUT that one actually reached the PR. That record, not
+          # this step's `outcome`, is what the backstop step at the end of this
+          # job gates on; the argument for that choice lives with the gate,
+          # since it is a claim about what the gate would do rather than about
+          # this helper.
+          #
+          # One consequence belongs here rather than there: recording only on a
+          # SUCCESSFUL post means a notice that fails to send leaves the output
+          # unset, so the backstop tries again.
+          #
+          # Two details of the REST call are load-bearing rather than
+          # ceremonial. `jq -Rs` builds the JSON, so a body carrying a quote,
+          # a backslash or a newline is escaped by a JSON encoder instead of
+          # by hand; it is fed by `printf '%s'` rather than a herestring,
+          # which would append a newline the body never had. And the explicit
+          # `Content-Type: application/json` header is required: gh sets that
+          # header only when it serializes the parameters itself, and an
+          # `--input` body reaches it as an opaque `io.Reader` with
+          # `bodyIsJSON` left false (cli/cli `pkg/cmd/api/http.go`, read
+          # 2026-09-24), so without the header the POST carries none.
+          #
+          # `> /dev/null` is not one of the two: it only drops the created
+          # comment's JSON, which gh prints to stdout on success, so removing
+          # it would fill the run log and change nothing else. Errors reach
+          # stderr either way.
+          post_notice() {
+            if printf '%s' "$1" | jq -Rs '{body: .}' \
+                 | gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+                     --method POST \
+                     -H "Content-Type: application/json" \
+                     --input - > /dev/null; then
+              # `|| echo` so the append is never this function's return
+              # status. It is the last command of the branch, and post_notice
+              # is called bare under `set -e`, so a failed write -- a full or
+              # truncated $GITHUB_OUTPUT -- would otherwise kill the step
+              # AFTER the comment landed, reddening a job whose notice did
+              # reach the PR.
+              #
+              # It does NOT stop the backstop firing in that case, and an
+              # earlier revision of this comment claimed it did. The backstop
+              # gates on `notice_posted != 'true'`, and a failed write leaves
+              # that output unset whether or not the step survives, so a
+              # contradiction beneath a successful acknowledgement stays
+              # reachable. It is recorded as a residual with the backstop's
+              # own, below.
+              echo "notice_posted=true" >> "$GITHUB_OUTPUT" \
+                || echo "::warning::Could not record notice delivery for PR #$PR_NUMBER."
+            else
+              echo "::warning::Could not post a notice to PR #$PR_NUMBER."
+            fi
+          }
+          # The job-level `if:` only does a cheap startsWith('/review')
+          # pre-filter; GitHub Actions expressions cannot reliably tell
+          # '/review' from '/reviewer', nor handle a newline or tab after the
+          # command. Enforce the real match here: the body must begin with a
+          # standalone '/review' token, followed by whitespace or end-of-string.
+          #
+          # `nocasematch`, because the two gates otherwise disagree about case
+          # and the disagreement is silent. GitHub documents `startsWith` as
+          # NOT case sensitive, and bash `=~` is; measured on bash 5.2.21,
+          # `/Review` satisfies the `if:` above, starts this runner, fails this
+          # regex and exits 0 -- dispatching nothing and posting nothing, which
+          # from the PR is indistinguishable from a review that has not started
+          # yet. `/reviewer` still fails, measured the same way. gha carried the
+          # same gap; Morrison-Lab/gha#910 fixed it there on 2026-09-23, so the
+          # two copies now agree and this is no longer a divergence.
+          #
+          # A body that begins `/review` and then continues into another word
+          # (`/reviewer`, `/review-please`) passes the `if:` above, spends a
+          # runner, and fails this regex. Exiting 0 in silence there leaves the
+          # same indistinguishable-from-not-started thread the case fix removed,
+          # so say what the accepted form is instead. The notice cannot begin
+          # with `/review`, or it would re-enter this path itself.
+          shopt -s nocasematch
+          if [[ ! "$COMMENT_BODY" =~ ^/review([[:space:]]|$) ]]; then
+            shopt -u nocasematch
+            echo "Comment does not start with a standalone '/review' command; skipping dispatch."
+            post_notice ":grey_question: No review was dispatched: the command has to be \`/review\` on its own, followed by whitespace or the end of the line."
+            exit 0
+          fi
+          shopt -u nocasematch
+          # This workflow's own filename, so the dispatch resolves regardless of
+          # what the file is named here. WF_PATH is the .github/workflows/<file>
+          # portion; strip the directory to get the filename `gh workflow run`
+          # expects.
+          WF_FILE=$(basename "$WF_PATH")
+          # This job never checks out the repo, so the PR's head branch has to
+          # be looked up explicitly. --ref pins the dispatched run's check-runs
+          # to that branch instead of the default branch workflow_dispatch falls
+          # back to when no ref is given (gha#285) -- without it,
+          # `require-review`'s check-run lands on the wrong commit.
+          # Every failure below this point has to reach the PR, not just the
+          # run log. A bare `set -e` exit here leaves the thread silent, which
+          # is the state this whole job exists to get out of --- the same
+          # silent-thread class as gha#360 (a failed push) and gha#379 (a
+          # Gemini quota skip).
+          if ! PR_JSON=$(gh api "repos/$REPO/pulls/$PR_NUMBER"); then
+            echo "::error::Could not read PR #$PR_NUMBER; no review was dispatched."
+            post_notice ":warning: \`/review\` received, but reading this PR failed, so no review was dispatched. See the [dispatch run]($RUN_URL)."
+            exit 1
+          fi
+          PR_BRANCH=$(jq -r '.head.ref' <<< "$PR_JSON")
+          PR_HEAD_REPO=$(jq -r '.head.repo.full_name' <<< "$PR_JSON")
+          echo "Dispatching $WF_FILE to review PR #$PR_NUMBER ($PR_BRANCH) (/review comment)."
+          # A scalar rather than an array of flags, because `--ref` is now
+          # always passed: each of the four fallbacks below chooses a DIFFERENT
+          # ref rather than dropping the flag. gha's `dispatch-review.sh` omits it
+          # on these paths, and this caller used to match that; the omission is
+          # what reaches for `contents: read` here, as DEFAULT_BRANCH's comment
+          # above records. The dispatched run is the same either way, since
+          # what `gh` resolves when the flag is absent is this same branch.
+          DISPATCH_REF="$PR_BRANCH"
+          # A fork PR's head branch only exists in the fork, not in $REPO, so
+          # --ref would fail to resolve there (gha#289). Dispatch from the
+          # default branch instead; the resulting check-run mis-attributes to
+          # it, the lesser problem.
+          if [ "$PR_HEAD_REPO" != "$REPO" ]; then
+            echo "::notice::PR #$PR_NUMBER is from a fork ($PR_HEAD_REPO); dispatching $WF_FILE from $DEFAULT_BRANCH."
+            DISPATCH_REF="$DEFAULT_BRANCH"
+          fi
+          # jq -r prints the string "null" for an absent field, and --ref null
+          # fails the dispatch.
+          if [ -z "$PR_BRANCH" ] || [ "$PR_BRANCH" = "null" ]; then
+            echo "::notice::PR #$PR_NUMBER has no resolvable head ref; dispatching $WF_FILE from $DEFAULT_BRANCH."
+            DISPATCH_REF="$DEFAULT_BRANCH"
+          fi
+          # When the PR edits top-level workflow YAML, dispatch from the
+          # default branch so GitHub executes the default-branch caller rather
+          # than the PR head (gha#598). The classification is the step above's,
+          # which is gha's own `detect-pr-workflow-edits`; nothing here
+          # re-derives it.
+          #
+          # Three-valued rather than two, because `continue-on-error` on that
+          # step turns a failure into an EMPTY output rather than a verdict.
+          # `true` and empty both substitute DEFAULT_BRANCH; only a literal
+          # `false` keeps the head ref.
+          #
+          # Two limits the composite shares with any caller, neither of them
+          # introduced here:
+          #
+          # The file list it classifies is BASE-relative, so the guard cannot
+          # see a workflow edit a PR merely INHERITS. A PR stacked on another
+          # PR's branch reports only its own changes against that branch, so
+          # YAML the parent edited is absent from the list while still present
+          # at the head this dispatch would run. Reported as
+          # Morrison-Lab/gha#916. Unreachable here while every PR targets
+          # `main`, where the base is the trusted branch.
+          #
+          # `list-pr-changed-files.sh` fails closed by comparing the listed
+          # count against `.changed_files`, and that comparison is only
+          # load-bearing if `.changed_files` is not subject to the same
+          # 3000-file cap as the listing -- if both were capped they would
+          # agree at exactly the boundary being policed. `.changed_files` is a
+          # scalar on the pull-request object rather than a page of a paginated
+          # list, and GitHub documents no cap on it, so the comparison holds;
+          # failing closed on a listed count that REACHES the cap would make
+          # that independent of the documentation, and is asked for upstream as
+          # Morrison-Lab/gha#917.
+          if [ "$WF_EDITS" = "true" ]; then
+            echo "::notice::PR #$PR_NUMBER edits workflow files; dispatching $WF_FILE from $DEFAULT_BRANCH so GitHub executes trusted workflow YAML (gha#598)."
+            DISPATCH_REF="$DEFAULT_BRANCH"
+          elif [ "$WF_EDITS" != "false" ]; then
+            echo "::notice::Could not classify PR #$PR_NUMBER's changed files; dispatching $WF_FILE from $DEFAULT_BRANCH so GitHub executes trusted workflow YAML (gha#598)."
+            DISPATCH_REF="$DEFAULT_BRANCH"
+          fi
+          # One guard at the point of use rather than one per branch. Every
+          # path above either keeps a head ref the two checks have already
+          # cleared or substitutes DEFAULT_BRANCH, so the only way to arrive
+          # here empty is an event payload carrying no
+          # `repository.default_branch` -- which is not a shape GitHub
+          # documents.
+          #
+          # Failing here says so on the PR. Passing the empty value through
+          # would not: `gh` cannot tell `--ref ""` from a `--ref` that was
+          # never passed, since both reach the same `if ref == ""` and both
+          # then call `api.RepoDefaultBranch` (cli/cli
+          # `pkg/cmd/workflow/run/run.go`, read 2026-09-24). So an unguarded
+          # empty ref would land in exactly the GraphQL `defaultBranchRef`
+          # path DEFAULT_BRANCH's comment above exists to avoid, and fail for
+          # want of `contents: read` rather than saying the ref was empty.
+          if [ -z "$DISPATCH_REF" ] || [ "$DISPATCH_REF" = "null" ]; then
+            echo "::error::Could not resolve a ref to dispatch $WF_FILE for PR #$PR_NUMBER."
+            post_notice ":warning: \`/review\` received, but no branch could be resolved to dispatch the review from, so none started. See the [dispatch run]($RUN_URL)."
+            exit 1
+          fi
+          # --repo is required: this job does not check out the repo, so gh has
+          # no git remote to infer it from.
+          # "probably" in the notice below, not "no review ran": a dispatch is
+          # fire-and-forget, so GitHub can accept it and the client still see a
+          # timeout or a reset. Closing that would need polling for the run the
+          # dispatch created, which this job has no handle on -- `gh workflow
+          # run` returns no run id. Erring toward "probably" costs a hedge; the
+          # other direction tells a reader no review is coming while one runs.
+          if ! gh workflow run "$WF_FILE" --repo "$REPO" --ref "$DISPATCH_REF" -f pr_number="$PR_NUMBER"; then
+            echo "::error::Dispatching $WF_FILE for PR #$PR_NUMBER failed; a review may or may not have started."
+            post_notice ":warning: \`/review\` received, but the dispatch call failed, so a review has probably not started. See the [dispatch run]($RUN_URL)."
+            exit 1
+          fi
+          # Recorded separately from `notice_posted`, because the two answer
+          # different questions. `notice_posted` says whether the PR was told
+          # anything; `dispatched` says whether a review is actually on its
+          # way. The backstop needs the second to word itself honestly: it can
+          # fire on a job that dispatched successfully and was then cancelled
+          # before the acknowledgement below, and telling that PR no review
+          # started is the same falsehood the "probably" hedge above avoids.
+          echo "dispatched=true" >> "$GITHUB_OUTPUT" \
+            || echo "::warning::Could not record the dispatch for PR #$PR_NUMBER."
+          post_notice ":mag: \`/review\` received --- dispatched a Claude review of this PR (see the [dispatch run]($RUN_URL)). The review posts as its own comment when it finishes."
+
+      # The step above reports every failure it can reach from inside its own
+      # `run:` block. It cannot report one that happens before that block
+      # starts --- the parse-workflow-ref step failing, the job's 10-minute
+      # timeout expiring, a runner loss --- and each of those leaves the PR
+      # thread silent, which is the state this job exists to get out of.
+      #
+      # Gated on whether a notice actually REACHED the PR, which is what this
+      # step is here to guarantee -- not on the dispatch step's `outcome`. See
+      # the `post_notice` comment in that step for why `outcome` answers the
+      # wrong question in both directions.
+      #
+      # `notice_posted` is unset when the step never ran, when it died before
+      # posting, and when its post failed, so the notice goes out in each of
+      # those; it is `true` once any notice landed, including the success
+      # acknowledgement, so a cancellation after a notice has landed stays
+      # quiet. A cancellation between a good dispatch and that acknowledgement
+      # does not: the output is still unset there, which is exactly the state
+      # the `dispatched`-keyed body below is written for.
+      #
+      # The gate is `always()`, not `failure() || cancelled()`. Two of the
+      # step's terminal paths call post_notice and then exit 0 -- the
+      # unrecognized-command branch and the success acknowledgement -- so on
+      # those a failed post leaves the step green. Under the narrower gate this
+      # step would skip and the PR would hear nothing at all, under a green
+      # check, which is worse than the failure it was written for. `always()`
+      # makes the condition read as what it means: post unless a notice
+      # already landed.
+      #
+      # Not every terminal path calls post_notice. The ones that do not are a
+      # `basename` or `jq` failure, which `set -e` turns into a non-zero exit,
+      # and a step that never starts at all: an oversized COMMENT_BODY makes
+      # the runner's own execve fail with E2BIG, before line 1 of that script
+      # runs (Linux caps one envp string at MAX_ARG_STRLEN = 131072 bytes,
+      # while GitHub permits 65536-character comments, which is 256 KiB in
+      # mostly-4-byte UTF-8). The second is not a `set -e` death, and an
+      # earlier revision of this comment called it one. Both report `failure`,
+      # so the narrower gate would have covered them; the exit-0 pair above is
+      # what it would not.
+      #
+      # A job timeout sets the step's status to cancelled rather than failed:
+      # `cancelled()` is job-scoped, not workflow-scoped (actions/runner,
+      # CancelledFunction.cs returns JobContext.Status == Cancelled, and
+      # StepsRunner.cs sets jobContext.Result on job cancellation while still
+      # evaluating each remaining step's `if`), so this step still runs.
+      #
+      # The body is chosen from `dispatched` rather than fixed, because this
+      # step fires in two states that call for opposite sentences. If the
+      # dispatch call returned zero, a review is queued and may already be
+      # running, so claiming none started would be false -- the same falsehood
+      # the "probably" hedge in the step above exists to avoid, and it is
+      # reachable here by a cancellation landing between the dispatch and the
+      # acknowledgement. If it did not, nothing was queued.
+      #
+      # Two residuals it does not cover. If this notice also fails to send,
+      # nothing reaches the PR; closing that would need a notice that does not
+      # depend on the same API. And if a notice posts but the $GITHUB_OUTPUT
+      # write recording it fails, this step fires anyway and posts under a
+      # notice that already landed; closing that would need a second source of
+      # truth for "a notice reached this PR", such as re-reading the PR's
+      # comments for $RUN_URL.
+      - name: Report a dispatch outcome that never reached the PR
+        if: ${{ always() && steps.dispatch.outputs.notice_posted != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DISPATCHED: ${{ steps.dispatch.outputs.dispatched }}
+        run: |
+          set -uo pipefail
+          # No `-e`, deliberately. This step is the last thing that can tell
+          # the PR anything, so a death before its one `gh` call costs the
+          # notice outright. Every command below is a shell builtin or that
+          # call, which carries its own `|| echo`, so `-e` would add no
+          # detection here and one more way to lose the notice.
+          # Neither body names a failure mode, because this step is reachable
+          # on a GREEN job: the unrecognized-command branch and the success
+          # acknowledgement each exit 0, so a post that failed there leaves the
+          # step green with `notice_posted` unset. Saying "this job failed or
+          # timed out" would then be false, and would send a reader to a run
+          # log showing nothing wrong. What this step can honestly assert is
+          # that the PR was not told -- so each body reports the confirmation
+          # gap and leaves the cause to the linked run.
+          if [ "$DISPATCHED" = "true" ]; then
+            body=":warning: \`/review\` received and a review was dispatched, but this job could not confirm that on the PR. The review may still post its own comment. See the [dispatch run]($RUN_URL)."
+          else
+            body=":warning: \`/review\` received, but this job could not confirm that a review started. See the [dispatch run]($RUN_URL)."
+          fi
+          # REST, not `gh issue comment`, for the reason given with this
+          # job's `issues: write` scope. `pipefail` is set above, so a `jq`
+          # failure reaches the `||` rather than being masked by `gh`'s exit
+          # status.
+          printf '%s' "$body" | jq -Rs '{body: .}' \
+            | gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+                --method POST \
+                -H "Content-Type: application/json" \
+                --input - > /dev/null \
+            || echo "::warning::Could not post the dispatch-outcome notice."
+
+  review:
+    # pull_request and workflow_dispatch only; the issue_comment path is handled
+    # by dispatch-on-comment above, which re-enters via workflow_dispatch.
+    # Without this gate every PR comment would spawn a pointless (skipped) call
+    # of the reusable workflow.
+    if: github.event_name != 'issue_comment'
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      # No `id-token: write`. The callee omits it deliberately: forwarding
+      # `github.token` skips claude-code-action's OIDC App-token exchange,
+      # whose DEFAULT_PERMISSIONS are write, so granting it would let a dropped
+      # override mint that write token against an untrusted PR diff -- the
+      # split gha#580 exists to enforce. ai-config's caller grants it; that is
+      # inert there only because no job consumes it, and it is not a reason to
+      # widen the ceiling past what gha's own README recommends.
+      actions: read   # lets the reviewer read CI status (github_ci MCP server)
+      # The v3 callee requests `checks: read` for its review job (gha#833), so
+      # the check-runs reads `check-pr-fully-clean.py` makes inside the review
+      # succeed. On v2 they returned 403, and the review reported that as a
+      # not-clean verdict on a clean diff (#220).
+      checks: read
+    uses: Morrison-Lab/gha/.github/workflows/claude-code-review.yml@v3
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SUBMODULES_TOKEN: ${{ secrets.SUBMODULES_TOKEN }}
+    with:
+      pr-number: ${{ github.event.pull_request.number || inputs.pr_number }}
+      # This repository's only submodule is `latex-macros`
+      # (Morrison-Lab/macros), which is public, so the callee clones it
+      # anonymously and needs no SUBMODULES_TOKEN. Without this input the
+      # reviewer sees the pin as one opaque gitlink SHA and the checkout has an
+      # empty `latex-macros/`, so it cannot confirm that a macro a PR uses is
+      # defined, and reports NOT_CLEAN on a correct diff (lds#921).
+      checkout-submodules: true
+      prompt-addendum: |
+        ## What this repository is, and the one thing that must not happen
+
+        These are the student-facing lecture notes for DATA 571. The repository is
+        private and is no longer planned to go public, so weigh disclosure risk
+        accordingly --- but its single governing invariant is unchanged, because it
+        never rested on publicity: **nothing revealing an answer to a graded item may
+        enter it.** This is what students read. Assessment material and every solution
+        live in `Morrison-Lab/mlg`; third-party reference material lives in
+        `Morrison-Lab/mlr`. Both stay private.
+
+        A leak here is still not a bug to fix later. A solution in the git history
+        cannot be withdrawn by deleting the file, and everyone with repository access
+        can already fetch it.
+
+        ## Check this before anything else
+
+        Three disclosure leaks reached this repository during the Spring 2025
+        import, on a pull-request branch, and each one survived the checking
+        that caught the one before it. They were corrected on that branch, so
+        `main` never held them, but the pushed commits remain reachable
+        through that pull request's refs until they are purged
+        ([#27](https://github.com/Morrison-Lab/lds/issues/27)). A push to any
+        branch here, a pull-request branch included, puts its content in this
+        repository before you review it. Catching these was sequencing rather
+        than a mechanism, which is why you exist. Check each class explicitly
+        rather than assuming a diff of course material is inert:
+
+        1. **A notebook's stored `outputs`, not just its source cells.** Clearing what
+           a cell says does not clear what it already printed, and the printed value is
+           the answer. Any `.ipynb` added or modified here should have empty `outputs`.
+           Flag a non-empty `outputs` array as a finding, every time.
+        2. **Content inside container formats.** A `.pptx` is a zip; a per-file hash
+           check and a `git diff` are both blind to what is in it. One deck carried a
+           hidden slide (`show="0"`, absent from any slideshow or PDF export) titled
+           `Exercise Solution:` whose answers were drawn as vector paths, so no text
+           extraction could read them.
+        3. **Worked examples in lecture material.** A deck or notebook that solves a
+           graded exercise on the slide is student-facing and still fails the test.
+
+        ## How to judge a routing decision
+
+        The dividing line is **disclosure, not audience.** "Students see it" does not
+        put something here. Ask instead whether it reveals an answer to something
+        graded. If it does, it belongs in `mlg`, however student-facing it is.
+
+        When a diff moves material between the two repositories, check the
+        direction: material leaving this repository is nearly always safe, and
+        material arriving needs the checks above.
+
+        The `latex-macros` submodule is checked out, at the commit the pull
+        request pins. Read `latex-macros/macros.qmd` to confirm that a macro
+        the diff uses is defined and expands to what the prose says, rather
+        than reporting it as unverifiable. If `latex-macros/` is empty, the
+        checkout failed: say so rather than approving the pin as though you
+        had read it.
+
+        ## CI state is not a finding
+
+        Your verdict is about the diff.
+        Do not turn check-run state into a finding: a check still in progress,
+        your own `review / claude-review` job, or `require-clean-verdict`
+        failing because it read an earlier review's verdict. The last two
+        exist only because you are running, so a review that counts them can
+        never come back clean. If you run `check-pr-fully-clean.py`, report its
+        CI lines as notes. CI is gated at merge time, by
+        `require-clean-verdict` and by `check-pr-fully-clean.py` run after
+        every check has finished. A check that has *completed* with a failure
+        caused by this diff (a render error, a typo check) is still a finding.
