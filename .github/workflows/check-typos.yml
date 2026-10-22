@@ -1,0 +1,21 @@
+# Thin caller of Morrison-Lab/gha's reusable typo check (crate-ci/typos).
+# It checks a list of known misspellings, so it needs no wordlist, and it is
+# diff-scoped, so it flags only what a PR adds.
+# No `push` trigger: with no PR base to diff against, the reusable workflow
+# skips, so a push run would report success having checked nothing.
+name: Check typos
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    permissions:
+      contents: read
+    uses: Morrison-Lab/gha/.github/workflows/check-typos.yml@v3
+    with:
+      globs: '*.md *.sh *.yml *.bats'
+      # A manual run has no PR to diff against, and would otherwise skip
+      # having examined nothing; make it scan the whole tree instead.
+      base-ref: ${{ github.event_name == 'workflow_dispatch' && 'all' || '' }}
