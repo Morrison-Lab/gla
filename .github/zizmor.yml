@@ -1,0 +1,20 @@
+# zizmor configuration, read by `lint-workflows.yml`.
+#
+# See https://docs.zizmor.sh/configuration/.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # Accept any `@ref` pin rather than demanding a commit SHA.
+        #
+        # zizmor's default demands a commit-SHA pin for every action. This
+        # repo pins actions and the Morrison-Lab/gha reusable workflows to
+        # tags on purpose, and `.github/dependabot.yml` keeps those tags
+        # current.
+        #
+        # `ref-pin` does NOT tell a tag from a branch: `actions/checkout@main`
+        # passes it too (checked with zizmor 1.28.0, offline). rme's copy of
+        # this file says otherwise, and is wrong. So a branch pin such as
+        # `@main`, which moves with no review and no dependabot PR, is left
+        # to code review to catch.
+        "*": ref-pin

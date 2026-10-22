@@ -1,0 +1,18 @@
+# Keep pinned GitHub Actions current.
+#
+# Dependabot scans .github/workflows/ and opens a PR when a newer release of a
+# pinned action is available. This is what makes the tag-pin policy in
+# `.github/zizmor.yml` safe.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(actions)"
+    # Wait before adopting a new release, so a compromised or broken one is
+    # not pulled in the hour it ships. `default-days` only: the semver-*
+    # variants are rejected for this ecosystem.
+    cooldown:
+      default-days: 7
