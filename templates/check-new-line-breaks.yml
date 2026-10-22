@@ -35,7 +35,7 @@ variables:
   GLA_PROJECT_ID: "2058"
   # Pinned commit SHA in gla to fetch check-new-line-breaks.py from.
   # Pin to an immutable SHA, never a branch.
-  GLA_NLB_REF: "f315152a6254f7d891dfe925f1d70a184af9827e"
+  GLA_NLB_REF: "255b4778c6bd17e0d1bd750012499d05016cfe06"
   # Expected sha256 of check-new-line-breaks.py. Verified before the
   # script runs. Set to "" to skip verification. MUST be updated whenever GLA_NLB_REF is.
   GLA_NLB_SHA256: "ab8e7a6700963c59bfe041762112e41f969b727519b2e526d55e9f09ef26a3c9"
@@ -129,7 +129,7 @@ variables:
         if [ -n "${GITLAB_TOKEN:-}" ]; then
           AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
         fi
-        TARGET_REF="${GLA_NLB_REF:-${GLA_REF:-166525262340b33653cf7d2477e06456a76ac210}}"
+        TARGET_REF="${GLA_NLB_REF:-${GLA_REF:-255b4778c6bd17e0d1bd750012499d05016cfe06}}"
         SCRIPT_BASE="${CI_API_V4_URL}/projects/${GLA_PROJECT_ID}/repository/files/scripts%2Fcheck-new-line-breaks%2Epy/raw"
         HTTP_CODE=$(curl -sS -w '%{http_code}' --get --header "$AUTH_HEADER" \
           --data-urlencode "ref=${TARGET_REF}" \
