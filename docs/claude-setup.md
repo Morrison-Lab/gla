@@ -116,7 +116,7 @@ It is not needed to download the shared HACtions scripts.
 
 ### Step 2a: Allow the consumer project to fetch HACtions scripts
 
-If your copy of HACtions is private, a HACtions Maintainer must add the consumer project to
+If the HACtions project is private, a HACtions Maintainer must add the consumer project to
 HACtions' CI/CD job token allowlist:
 
 1. In the HACtions project, go to **Settings → CI/CD**.
