@@ -116,7 +116,7 @@ It is not needed to download the shared HACtions scripts.
 
 ### Step 2a: Allow the consumer project to fetch HACtions scripts
 
-HACtions is private, so a HACtions Maintainer must add the consumer project to
+If your copy of HACtions is private, a HACtions Maintainer must add the consumer project to
 HACtions' CI/CD job token allowlist:
 
 1. In the HACtions project, go to **Settings → CI/CD**.
@@ -130,7 +130,7 @@ The `claude.yml` template then fetches scripts with the consumer job's
 GitLab documents this raw repository-file endpoint and the allowlist requirement in its
 [CI/CD job token documentation](https://docs.gitlab.com/ci/jobs/ci_job_token/).
 The user associated with the pipeline must also have sufficient access to the
-private HACtions project.
+HACtions project, if it is private.
 This includes the identity associated with a scheduled or trigger-created
 pipeline, not only the person who configured the consumer repository.
 The template retains a `GITLAB_TOKEN` fallback so existing consumers continue
