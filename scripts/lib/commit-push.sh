@@ -33,7 +33,7 @@ _commit_push_mr() {
   # fetched into the working tree by templates/claude.yml's before_script when
   # the consumer repo doesn't track them locally. Without this exclusion they
   # get swept into every LLM-authored commit as unrelated stray files.
-  # See HACtions#48.
+  # See gla#48.
   git add -A -- . ':!.gitlab/scripts'
   git status --short
   # Project convention: "Acted-By: ci-bot" trailer identifies bot-authored commits.

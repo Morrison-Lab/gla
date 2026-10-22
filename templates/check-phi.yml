@@ -1,9 +1,9 @@
-# HACtions: PHI scanning template
+# gla: PHI scanning template
 # Include this in your .gitlab-ci.yml to scan for content that looks like
 # Protected Health Information (PHI).
 #
 # The scanner itself is Morrison-Lab/gha's check-phi.py, fetched at runtime from
-# GitHub at a pinned commit SHA. HACtions does not reimplement it: the script is
+# GitHub at a pinned commit SHA. gla does not reimplement it: the script is
 # platform-agnostic (configured entirely through PHI_* environment variables,
 # with no GitHub API or GITHUB_* coupling), so this template only has to map
 # GitLab CI context onto that contract. See issue #65.
@@ -21,27 +21,27 @@
 #   - Egress to raw.githubusercontent.com. The scanner is fetched from GitHub at
 #     job time; without egress the job fails loudly (by design -- see below).
 #   - A Debian/Ubuntu-based image, because before_script installs curl and git
-#     with apt-get. An Alpine or distroless HAC_PHI_IMAGE needs those tools
+#     with apt-get. An Alpine or distroless GLA_PHI_IMAGE needs those tools
 #     baked in and the before_script overridden.
 #
 # Optional CI/CD Variables:
-#   HAC_PHI_IMAGE           Image providing python3 (default: "python:3.13-slim").
+#   GLA_PHI_IMAGE           Image providing python3 (default: "python:3.13-slim").
 #                           Must be Debian/Ubuntu-based unless before_script is
 #                           overridden; see Runner preconditions above.
-#   HAC_GHA_REPO            owner/repo hosting check-phi.py (default: "Morrison-Lab/gha").
-#   HAC_GHA_REF             Commit SHA to fetch at. Pin to a SHA, never a branch:
+#   GLA_GHA_REPO            owner/repo hosting check-phi.py (default: "Morrison-Lab/gha").
+#   GLA_GHA_REF             Commit SHA to fetch at. Pin to a SHA, never a branch:
 #                           the fetched script is EXECUTED, so a moving ref means
 #                           unreviewed code runs in your pipeline.
-#   HAC_PHI_SHA256          Expected sha256 of check-phi.py. Verified before the
+#   GLA_PHI_SHA256          Expected sha256 of check-phi.py. Verified before the
 #                           script runs. Set to "" to skip verification (not
-#                           recommended). MUST be updated whenever HAC_GHA_REF is.
-#   HAC_PHI_DETECTORS       Comma-separated detector set, overriding the default.
-#   HAC_PHI_PATHS_IGNORE    Comma/newline-separated globs to skip. Supports
+#                           recommended). MUST be updated whenever GLA_GHA_REF is.
+#   GLA_PHI_DETECTORS       Comma-separated detector set, overriding the default.
+#   GLA_PHI_PATHS_IGNORE    Comma/newline-separated globs to skip. Supports
 #                           *, ?, and recursive ** (e.g. "tests/fixtures/**").
-#   HAC_PHI_ALLOWLIST_FILE  Path to a file of regexes; a matching line is
+#   GLA_PHI_ALLOWLIST_FILE  Path to a file of regexes; a matching line is
 #                           suppressed. When unset, .gitlab/phi-allowlist.txt is
 #                           used if present, then .github/phi-allowlist.txt.
-#   HAC_PHI_FAIL            "false" to warn instead of failing (default: "true").
+#   GLA_PHI_FAIL            "false" to warn instead of failing (default: "true").
 #
 # Suppressing a false positive:
 #   - add a "phi-allow" comment on the offending line, or
@@ -69,11 +69,11 @@
 # block -- which is exactly what the README tells them to do. Defined here, the
 # consumer's own file wins.
 variables:
-  HAC_PHI_IMAGE: "python:3.13-slim"
-  HAC_GHA_REPO: "Morrison-Lab/gha"
+  GLA_PHI_IMAGE: "python:3.13-slim"
+  GLA_GHA_REPO: "Morrison-Lab/gha"
   # Pinned commit SHA of Morrison-Lab/gha. Bump deliberately, and update
-  # HAC_PHI_SHA256 in the same change.
-  HAC_GHA_REF: "9311cb1c2f92e197e05fe003e879343efcd7905d"
+  # GLA_PHI_SHA256 in the same change.
+  GLA_GHA_REF: "9311cb1c2f92e197e05fe003e879343efcd7905d"
   # 64 hex characters, as a SHA-256 digest must be. Re-derive rather than
   # counting by eye:
   #   curl -sS "https://raw.githubusercontent.com/Morrison-Lab/gha/\
@@ -81,15 +81,15 @@ variables:
   #     | sha256sum
   # tests/lib/check_phi_pin.bats asserts ^[0-9a-f]{64}$ on this value, so a
   # truncated digest fails CI rather than reaching a consumer.
-  HAC_PHI_SHA256: "21db6ab41da5162262aabe9f869133fc63d83ea0945e7b84e6fe7591c3f00862"
-  HAC_PHI_DETECTORS: ""
-  HAC_PHI_PATHS_IGNORE: ""
-  HAC_PHI_ALLOWLIST_FILE: ""
-  HAC_PHI_FAIL: "true"
+  GLA_PHI_SHA256: "21db6ab41da5162262aabe9f869133fc63d83ea0945e7b84e6fe7591c3f00862"
+  GLA_PHI_DETECTORS: ""
+  GLA_PHI_PATHS_IGNORE: ""
+  GLA_PHI_ALLOWLIST_FILE: ""
+  GLA_PHI_FAIL: "true"
 
-.hac-check-phi:
+.gla-check-phi:
   stage: secrets
-  image: "${HAC_PHI_IMAGE}"
+  image: "${GLA_PHI_IMAGE}"
   needs: []
   interruptible: true
   variables:
@@ -101,7 +101,7 @@ variables:
     # full history does not force a working tree. A consumer setting
     # GIT_STRATEGY: none or GIT_CHECKOUT: "false" globally would leave the
     # scanner walking an absent or empty checkout and reporting no findings --
-    # a green PHI scan that examined nothing. Matches .hac-claude-review.
+    # a green PHI scan that examined nothing. Matches .gla-claude-review.
     GIT_STRATEGY: clone
     GIT_CHECKOUT: "true"
     GIT_DEPTH: 0
@@ -140,9 +140,9 @@ variables:
       # working tree would overwrite a consumer file tracked at that path --
       # letting its real content evade a whole-tree scan -- and then delete it
       # on a reused shell-executor workspace.
-      PHI_TMP="${TMPDIR:-/tmp}/hac-phi-${CI_JOB_ID:-$$}"
+      PHI_TMP="${TMPDIR:-/tmp}/gla-phi-${CI_JOB_ID:-$$}"
       mkdir -p "$PHI_TMP"
-      PHI_SCRIPT_URL="https://raw.githubusercontent.com/${HAC_GHA_REPO}/${HAC_GHA_REF}/check-phi/check-phi.py"
+      PHI_SCRIPT_URL="https://raw.githubusercontent.com/${GLA_GHA_REPO}/${GLA_GHA_REF}/check-phi/check-phi.py"
       HTTP_CODE=$(curl -sS -w '%{http_code}' "$PHI_SCRIPT_URL" -o "$PHI_TMP/check-phi.py") || true
       HTTP_CODE="${HTTP_CODE:-000}"
       # curl can emit unexpected output on failure, so HTTP_CODE is not
@@ -154,7 +154,7 @@ variables:
       if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
         echo "ERROR: Failed to fetch check-phi.py (HTTP $HTTP_CODE)" >&2
         echo "  URL: $PHI_SCRIPT_URL" >&2
-        echo "  Check HAC_GHA_REPO / HAC_GHA_REF, and that this runner has" >&2
+        echo "  Check GLA_GHA_REPO / GLA_GHA_REF, and that this runner has" >&2
         echo "  egress to raw.githubusercontent.com." >&2
         exit 1
       fi
@@ -171,18 +171,18 @@ variables:
     # Verify the fetched script before executing it.
     - |
       set -euo pipefail
-      if [ -n "${HAC_PHI_SHA256}" ]; then
+      if [ -n "${GLA_PHI_SHA256}" ]; then
         ACTUAL_SHA=$(sha256sum "$PHI_TMP/check-phi.py" | cut -d' ' -f1)
-        if [ "$ACTUAL_SHA" != "$HAC_PHI_SHA256" ]; then
+        if [ "$ACTUAL_SHA" != "$GLA_PHI_SHA256" ]; then
           echo "ERROR: check-phi.py checksum mismatch; refusing to execute." >&2
-          echo "  expected: $HAC_PHI_SHA256" >&2
+          echo "  expected: $GLA_PHI_SHA256" >&2
           echo "  actual:   $ACTUAL_SHA" >&2
-          echo "  If HAC_GHA_REF was bumped, update HAC_PHI_SHA256 to match." >&2
+          echo "  If GLA_GHA_REF was bumped, update GLA_PHI_SHA256 to match." >&2
           exit 1
         fi
         echo "check-phi.py checksum verified."
       else
-        echo "WARNING: HAC_PHI_SHA256 is empty; executing check-phi.py unverified." >&2
+        echo "WARNING: GLA_PHI_SHA256 is empty; executing check-phi.py unverified." >&2
       fi
     # Resolve the diff base. workflow.yml suppresses merge_request_event
     # pipelines, so CI_MERGE_REQUEST_DIFF_BASE_SHA is not set here -- these are
@@ -194,7 +194,7 @@ variables:
       # working tree would overwrite a consumer file tracked at that path --
       # letting its real content evade a whole-tree scan -- and then delete it
       # on a reused shell-executor workspace.
-      PHI_TMP="${TMPDIR:-/tmp}/hac-phi-${CI_JOB_ID:-$$}"
+      PHI_TMP="${TMPDIR:-/tmp}/gla-phi-${CI_JOB_ID:-$$}"
       mkdir -p "$PHI_TMP"
       if [ -n "${CI_COMMIT_TAG:-}" ]; then
         # A tag has no branch to diff against, and CI_COMMIT_BRANCH is empty on
@@ -242,9 +242,9 @@ variables:
       # working tree would overwrite a consumer file tracked at that path --
       # letting its real content evade a whole-tree scan -- and then delete it
       # on a reused shell-executor workspace.
-      PHI_TMP="${TMPDIR:-/tmp}/hac-phi-${CI_JOB_ID:-$$}"
+      PHI_TMP="${TMPDIR:-/tmp}/gla-phi-${CI_JOB_ID:-$$}"
       mkdir -p "$PHI_TMP"
-      ALLOWLIST="${HAC_PHI_ALLOWLIST_FILE}"
+      ALLOWLIST="${GLA_PHI_ALLOWLIST_FILE}"
       if [ -z "$ALLOWLIST" ]; then
         for candidate in .gitlab/phi-allowlist.txt .github/phi-allowlist.txt; do
           if [ -f "$candidate" ]; then
@@ -265,23 +265,23 @@ variables:
       # working tree would overwrite a consumer file tracked at that path --
       # letting its real content evade a whole-tree scan -- and then delete it
       # on a reused shell-executor workspace.
-      PHI_TMP="${TMPDIR:-/tmp}/hac-phi-${CI_JOB_ID:-$$}"
+      PHI_TMP="${TMPDIR:-/tmp}/gla-phi-${CI_JOB_ID:-$$}"
       mkdir -p "$PHI_TMP"
       # Read back as data. The previous version sourced a KEY=VALUE file, which
       # made any path containing a space (or a shell metacharacter) get parsed
       # as code rather than used as a path.
       export PHI_BASE_REF="$(cat "$PHI_TMP/base-ref")"
       export PHI_ALLOWLIST_FILE="$(cat "$PHI_TMP/allowlist")"
-      export PHI_DETECTORS="${HAC_PHI_DETECTORS}"
-      export PHI_PATHS_IGNORE="${HAC_PHI_PATHS_IGNORE}"
-      export PHI_FAIL="${HAC_PHI_FAIL}"
+      export PHI_DETECTORS="${GLA_PHI_DETECTORS}"
+      export PHI_PATHS_IGNORE="${GLA_PHI_PATHS_IGNORE}"
+      export PHI_FAIL="${GLA_PHI_FAIL}"
       # cwd stays the checkout, so the scanner still sees the repo.
       python3 -u "$PHI_TMP/check-phi.py"
   # The fetched scanner is executable Python pulled from GitHub, so it is
   # removed rather than left for a reused workspace. Nothing here touches the
   # checkout: the whole scratch directory is outside it.
   after_script:
-    - rm -rf "${TMPDIR:-/tmp}/hac-phi-${CI_JOB_ID:-}"
+    - rm -rf "${TMPDIR:-/tmp}/gla-phi-${CI_JOB_ID:-}"
 
 check-phi:
-  extends: .hac-check-phi
+  extends: .gla-check-phi

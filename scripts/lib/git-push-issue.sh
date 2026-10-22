@@ -11,7 +11,7 @@ _commit_push_issue() {
     return
   fi
 
-  # Exclude .gitlab/scripts/: see commit-push.sh for why. HACtions#48.
+  # Exclude .gitlab/scripts/: see commit-push.sh for why. gla#48.
   git add -A -- . ':!.gitlab/scripts'
   git status --short
   git commit -m "feat: implement changes for issue #${CLAUDE_ISSUE_IID}

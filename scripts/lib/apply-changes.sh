@@ -70,7 +70,7 @@ _check_scope_guard() {
   local MODIFIED_FILES OUT_OF_SCOPE
   # Stage all changes so we catch both modified AND newly created files.
   # commit-push also runs git add -A, so leaving changes staged is fine.
-  # Exclude .gitlab/scripts/: see commit-push.sh for why. HACtions#48.
+  # Exclude .gitlab/scripts/: see commit-push.sh for why. gla#48.
   git add -A -- . ':!.gitlab/scripts' 2>/dev/null || true
   MODIFIED_FILES=$(git diff --cached --name-only 2>/dev/null || true)
   OUT_OF_SCOPE=""

@@ -112,14 +112,14 @@ This token allows the CI job to read MR data, post comments, and push commits.
 
 The project access token is used for API requests and pushes **inside the
 consumer project**.
-It is not needed to download the shared HACtions scripts.
+It is not needed to download the shared gla scripts.
 
-### Step 2a: Allow the consumer project to fetch HACtions scripts
+### Step 2a: Allow the consumer project to fetch gla scripts
 
-HACtions is private, so a HACtions Maintainer must add the consumer project to
-HACtions' CI/CD job token allowlist:
+gla is private, so a gla Maintainer must add the consumer project to
+gla' CI/CD job token allowlist:
 
-1. In the HACtions project, go to **Settings → CI/CD**.
+1. In the gla project, go to **Settings → CI/CD**.
 2. Expand **Job token permissions** (**Token Access** on older GitLab
    versions).
 3. Under **CI/CD job token allowlist**, select **Add**, then add the consumer
@@ -130,7 +130,7 @@ The `claude.yml` template then fetches scripts with the consumer job's
 GitLab documents this raw repository-file endpoint and the allowlist requirement in its
 [CI/CD job token documentation](https://docs.gitlab.com/ci/jobs/ci_job_token/).
 The user associated with the pipeline must also have sufficient access to the
-private HACtions project.
+private gla project.
 This includes the identity associated with a scheduled or trigger-created
 pipeline, not only the person who configured the consumer repository.
 The template retains a `GITLAB_TOKEN` fallback so existing consumers continue
@@ -173,7 +173,7 @@ variables control reviewer selection:
 |------|-----------|
 | GPT only (default) | No additional variables |
 | Claude only | `REVIEW_MODEL=databricks-claude-sonnet-4-6` |
-| GPT + Claude | `HAC_CLAUDE_COMPANION_REVIEW=true` |
+| GPT + Claude | `GLA_CLAUDE_COMPANION_REVIEW=true` |
 | Another primary model | `REVIEW_MODEL=<Databricks endpoint name>` |
 
 `CLAUDE_MODEL` still controls the default model for `@claude` responses. It is
@@ -230,7 +230,7 @@ Add `claude.yml` to your `include:` list and the `claude` stage:
 
 ```yaml
 include:
-  - project: 'example-group/HACtions'
+  - project: 'example-group/gla'
     ref: main
     file:
       - '/templates/claude.yml'
@@ -241,15 +241,15 @@ stages:
   - claude
 ```
 
-The template defines two hidden jobs (`.hac-claude-review` and
-`.hac-claude-respond`) that extend into real jobs automatically. No additional
+The template defines two hidden jobs (`.gla-claude-review` and
+`.gla-claude-respond`) that extend into real jobs automatically. No additional
 job definitions needed.
 
 ### Optional: experimental Claude Code agent review
 
 To trial a read-only agent harness alongside the direct reviewer, add
 `/templates/agent-review.yml` to the `include:` list and set
-`HAC_AGENT_REVIEW_ENABLED=true`.
+`GLA_AGENT_REVIEW_ENABLED=true`.
 This does not replace `claude-review`.
 
 The agent job installs the pinned Claude Code CLI and a commit-pinned native
@@ -271,19 +271,19 @@ Configure these additional variables as protected and masked where applicable:
 
 | Variable | Value | Type | Protected | Masked | Expanded |
 |----------|-------|------|-----------|--------|----------|
-| `HAC_AGENT_REVIEW_ENABLED` | `true` | Variable | ❌ | ❌ | ❌ |
-| `HAC_AGENT_REVIEW_MODEL` | Model identifier exposed by the agent gateway | Variable | ❌ | ❌ | ❌ |
-| `HAC_AGENT_REVIEW_BASE_URL` | Anthropic-compatible gateway base URL | Variable | ✅ | ❌ | ❌ |
-| `HAC_AGENT_REVIEW_AUTH_TOKEN` | Gateway token | Variable | ✅ | ✅ | ❌ |
+| `GLA_AGENT_REVIEW_ENABLED` | `true` | Variable | ❌ | ❌ | ❌ |
+| `GLA_AGENT_REVIEW_MODEL` | Model identifier exposed by the agent gateway | Variable | ❌ | ❌ | ❌ |
+| `GLA_AGENT_REVIEW_BASE_URL` | Anthropic-compatible gateway base URL | Variable | ✅ | ❌ | ❌ |
+| `GLA_AGENT_REVIEW_AUTH_TOKEN` | Gateway token | Variable | ✅ | ✅ | ❌ |
 
 The job deliberately runs only for protected source branches with an open merge
 request.
 Protect the source-branch pattern used for agent-reviewed work before enabling
-`HAC_AGENT_REVIEW_ENABLED`.
+`GLA_AGENT_REVIEW_ENABLED`.
 Do not make the gateway token unprotected to run the job on ordinary feature
 branches.
 
-`HAC_AGENT_REVIEW_BASE_URL` is deliberately separate from `ANTHROPIC_BASE_URL`.
+`GLA_AGENT_REVIEW_BASE_URL` is deliberately separate from `ANTHROPIC_BASE_URL`.
 The latter is the direct Databricks serving-endpoint URL for
 `claude-review.sh`; it has not been established as Claude Code-compatible.
 Validate the gateway in a non-PHI test project before enabling the job for
@@ -328,7 +328,7 @@ production repositories.
 |---------|-------------|-----|
 | "No TRIGGER_PAYLOAD file found" | Pipeline not triggered via webhook URL | Ensure the webhook URL uses the `/ref/.../trigger/pipeline` format |
 | "401 Unauthorized" from GitLab API | `GITLAB_TOKEN` invalid or expired | Regenerate the project access token (Step 2) |
-| "404 Not Found" fetching a script from HACtions | Consumer project is not on HACtions' CI/CD job token allowlist, or the pipeline-associated user lacks access to HACtions | Have a HACtions Maintainer add the project under **Settings → CI/CD → Job token permissions** (**Token Access** on older versions) and verify the pipeline identity's access (Step 2a) |
+| "404 Not Found" fetching a script from gla | Consumer project is not on gla' CI/CD job token allowlist, or the pipeline-associated user lacks access to gla | Have a gla Maintainer add the project under **Settings → CI/CD → Job token permissions** (**Token Access** on older versions) and verify the pipeline identity's access (Step 2a) |
 | "401" from Databricks/Anthropic | `ANTHROPIC_API_KEY` (Databricks PAT) invalid or expired | Regenerate the PAT in Databricks (Step 1) |
 | "404" or model not found | `ANTHROPIC_BASE_URL` wrong or model not enabled | Verify the URL ends in `/serving-endpoints` and the model exists in your workspace |
 | `git push` fails | Token lacks push permission | Ensure the project access token has `write_repository` scope and Developer role |
@@ -478,7 +478,7 @@ copies at:
 - `.gitlab/scripts/claude-review.sh`
 - `.gitlab/scripts/claude-respond.sh`
 
-The template checks for local copies first and only fetches from HACtions if
+The template checks for local copies first and only fetches from gla if
 they don't exist.
 
 ### Restricting who can trigger Claude

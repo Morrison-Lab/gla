@@ -14,15 +14,15 @@ value_of() {
   [ -f "$TEMPLATE" ]
 }
 
-@test "HAC_NLB_REF is a full 40-hex commit SHA, not a branch name" {
-  run value_of HAC_NLB_REF
+@test "GLA_NLB_REF is a full 40-hex commit SHA, not a branch name" {
+  run value_of GLA_NLB_REF
   [ "$status" -eq 0 ]
   [ -n "$output" ]
   [[ "$output" =~ ^[0-9a-f]{40}$ ]]
 }
 
-@test "HAC_NLB_SHA256 is a full 64-hex digest" {
-  run value_of HAC_NLB_SHA256
+@test "GLA_NLB_SHA256 is a full 64-hex digest" {
+  run value_of GLA_NLB_SHA256
   [ "$status" -eq 0 ]
   [ -n "$output" ]
   [[ "$output" =~ ^[0-9a-f]{64}$ ]]
@@ -43,7 +43,7 @@ value_of() {
 }
 
 @test "both the hidden job and its concrete job are defined for nlb" {
-  run grep -c '^\.hac-check-new-line-breaks:' "$TEMPLATE"
+  run grep -c '^\.gla-check-new-line-breaks:' "$TEMPLATE"
   [ "$status" -eq 0 ]
   [ "$output" -eq 1 ]
 
@@ -52,20 +52,20 @@ value_of() {
   [ "$output" -eq 1 ]
 }
 
-@test "HAC_NLB_SHA256 matches canonical scripts/check-new-line-breaks.py checksum" {
-  run value_of HAC_NLB_SHA256
+@test "GLA_NLB_SHA256 matches canonical scripts/check-new-line-breaks.py checksum" {
+  run value_of GLA_NLB_SHA256
   [ "$status" -eq 0 ]
   pinned_sha="$output"
   actual_sha=$(sha256sum scripts/check-new-line-breaks.py | awk '{print $1}')
   [ "$pinned_sha" = "$actual_sha" ]
 }
 
-@test "HAC_NLB_REF in git repository contains the script matching HAC_NLB_SHA256" {
-  run value_of HAC_NLB_REF
+@test "GLA_NLB_REF in git repository contains the script matching GLA_NLB_SHA256" {
+  run value_of GLA_NLB_REF
   [ "$status" -eq 0 ]
   pinned_ref="$output"
 
-  run value_of HAC_NLB_SHA256
+  run value_of GLA_NLB_SHA256
   [ "$status" -eq 0 ]
   pinned_sha="$output"
 

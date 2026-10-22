@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # =============================================================================
-# Regression tests for templates/version-check.yml's HAC_VERSION_SKIP_LABELS
+# Regression tests for templates/version-check.yml's GLA_VERSION_SKIP_LABELS
 # comma-split / trim / empty-guard logic (MR !38 review finding #4).
 # =============================================================================
 # The loop below mirrors the shell logic in the "Check for skip labels on
@@ -9,14 +9,14 @@
 #
 # Run with: bats tests/lib/version_check_skip_labels.bats
 
-# skip_check LABELS HAC_VERSION_SKIP_LABELS
+# skip_check LABELS GLA_VERSION_SKIP_LABELS
 # Prints "skip:<label>" and returns 0 if a configured skip label matches one
 # of the newline-separated LABELS; otherwise prints nothing and returns 1.
 skip_check() {
   local LABELS="$1"
-  local HAC_VERSION_SKIP_LABELS="$2"
+  local GLA_VERSION_SKIP_LABELS="$2"
   local SKIP_LABELS skip_label
-  IFS=',' read -ra SKIP_LABELS <<< "$HAC_VERSION_SKIP_LABELS"
+  IFS=',' read -ra SKIP_LABELS <<< "$GLA_VERSION_SKIP_LABELS"
   for skip_label in "${SKIP_LABELS[@]}"; do
     skip_label=$(echo "$skip_label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     [ -z "$skip_label" ] && continue

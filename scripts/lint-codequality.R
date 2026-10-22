@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# HACtions: Lint + Code Quality artifact generator
+# gla: Lint + Code Quality artifact generator
 #
 # This script runs lintr::lint_package() and writes a GitLab Code Quality JSON
 # artifact. It is invoked by templates/lint.yml after dependencies are installed.
@@ -21,20 +21,20 @@
 # every syntax-error commit.
 writeLines("[]", "lintr_results.json")
 
-# --- Helper functions provided by the hacr package ----------------------------
-# The hacr package (https://gitlab.example.com/example-group/hacr)
+# --- Helper functions provided by the glr package ----------------------------
+# The glr package (https://gitlab.example.com/example-group/glr)
 # provides safe_char, safe_num, map_severity, and lint_to_codequality.
-# templates/lint.yml installs hacr before running this script, so we use
-# namespace-qualified calls (hacr::lint_to_codequality) below.
+# templates/lint.yml installs glr before running this script, so we use
+# namespace-qualified calls (glr::lint_to_codequality) below.
 # ------------------------------------------------------------------------------
 
-# Early guard: fail fast with a clear message if hacr wasn't installed by the
+# Early guard: fail fast with a clear message if glr wasn't installed by the
 # lint template, before doing any expensive work (load_all, lint_package).
-if (!requireNamespace("hacr", quietly = TRUE)) {
+if (!requireNamespace("glr", quietly = TRUE)) {
   stop(
-    "The 'hacr' package is not installed. ",
+    "The 'glr' package is not installed. ",
     "templates/lint.yml should install it before running this script. ",
-    "See: https://gitlab.example.com/example-group/hacr",
+    "See: https://gitlab.example.com/example-group/glr",
     call. = FALSE
   )
 }
@@ -47,7 +47,7 @@ pkgload::load_all()
 lints <- lintr::lint_package()
 
 if (length(lints) > 0) {
-  lint_json <- lapply(lints, hacr::lint_to_codequality)
+  lint_json <- lapply(lints, glr::lint_to_codequality)
 
   jsonlite::write_json(lint_json, "lintr_results.json", auto_unbox = TRUE)
   message(sprintf("Found %d lint issue(s).", length(lints)))

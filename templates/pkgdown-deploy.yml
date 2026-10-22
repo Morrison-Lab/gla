@@ -1,4 +1,4 @@
-# HACtions: pkgdown multi-branch deployment template
+# gla: pkgdown multi-branch deployment template
 # Include this in your .gitlab-ci.yml to deploy pkgdown sites per branch.
 #
 # This handles the branch-specific deployment pattern:
@@ -11,7 +11,7 @@
 # Optional variables:
 #   SITE_BY_BRANCH: "TRUE" to deploy per-branch sites (default: "TRUE")
 
-.hac-integration-test:
+.gla-integration-test:
   stage: pkgdown-move
   dependencies:
     - integration
@@ -35,7 +35,7 @@
       - public
     expire_in: 30 days
 
-.hac-integration-production:
+.gla-integration-production:
   stage: pkgdown-move
   dependencies:
     - integration
@@ -54,7 +54,7 @@
       - public
     expire_in: 30 days
 
-.hac-integration-main:
+.gla-integration-main:
   stage: pkgdown-move
   dependencies:
     - integration
@@ -74,7 +74,7 @@
       - public
     expire_in: 30 days
 
-.hac-gh-pages-prep:
+.gla-gh-pages-prep:
   stage: prepare-deploy
   variables:
     SITE_BY_BRANCH: "TRUE"
@@ -87,7 +87,7 @@
     - wget https://raw.githubusercontent.com/statnmap/GitLab-Pages-Deploy/main/deploy_pages_branch.sh
     - /bin/bash deploy_pages_branch.sh
 
-.hac-pages:
+.gla-pages:
   stage: deploy
   script:
     - echo "deploy"
@@ -98,16 +98,16 @@
     - gh-pages
 
 integration-test:
-  extends: .hac-integration-test
+  extends: .gla-integration-test
 
 integration-production:
-  extends: .hac-integration-production
+  extends: .gla-integration-production
 
 integration-main:
-  extends: .hac-integration-main
+  extends: .gla-integration-main
 
 gh-pages-prep:
-  extends: .hac-gh-pages-prep
+  extends: .gla-gh-pages-prep
 
 pages:
-  extends: .hac-pages
+  extends: .gla-pages

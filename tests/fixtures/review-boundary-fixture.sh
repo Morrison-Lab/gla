@@ -74,13 +74,13 @@ export CI_COMMIT_BRANCH=feature CI_DEFAULT_BRANCH=main CI_COMMIT_SHA="$review_sh
 export CI_COMMIT_SHORT_SHA="${review_sha:0:8}" CI_COMMIT_MESSAGE=change
 export CI_PROJECT_ID=1 CI_API_V4_URL=https://gitlab.example/api/v4 GITLAB_TOKEN=mock-token
 export ANTHROPIC_BASE_URL=https://llm.example/api ANTHROPIC_AUTH_TOKEN=mock-token
-export HAC_REVIEW_AGENT=true CI_PIPELINE_SOURCE=push CI_PIPELINE_URL=https://gitlab.example/pipelines/1
+export GLA_REVIEW_AGENT=true CI_PIPELINE_SOURCE=push CI_PIPELINE_URL=https://gitlab.example/pipelines/1
 export MOCK_AGENT_STATE="$MOCK_STATE"
 case "$mode" in
-  call-exhaustion) export HAC_MAX_REVIEW_TOOL_CALLS=1 ;;
-  round-exhaustion) export HAC_MAX_REVIEW_TOOL_ROUNDS=1 ;;
-  deadline) export HAC_REVIEW_DEADLINE_SECONDS=0 ;;
-  oversized) export HAC_MAX_REVIEW_RESPONSE_CHARS=100 ;;
+  call-exhaustion) export GLA_MAX_REVIEW_TOOL_CALLS=1 ;;
+  round-exhaustion) export GLA_MAX_REVIEW_TOOL_ROUNDS=1 ;;
+  deadline) export GLA_REVIEW_DEADLINE_SECONDS=0 ;;
+  oversized) export GLA_MAX_REVIEW_RESPONSE_CHARS=100 ;;
   http400) : ;;
 esac
 

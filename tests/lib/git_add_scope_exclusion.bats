@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 # =============================================================================
-# Regression tests for HACtions#48: `git add -A` must exclude .gitlab/scripts/
+# Regression tests for gla#48: `git add -A` must exclude .gitlab/scripts/
 # =============================================================================
-# .gitlab/scripts/ is HACtions' own runtime library. templates/claude.yml's
+# .gitlab/scripts/ is gla' own runtime library. templates/claude.yml's
 # before_script fetches it into the working tree of consumer repos that don't
 # track those files locally. A bare `git add -A` in commit-push.sh,
 # git-push-issue.sh, and the scope guard in apply-changes.sh swept it into

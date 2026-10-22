@@ -1,60 +1,60 @@
-# HACtions: Linting template
+# gla: Linting template
 # Include this in your .gitlab-ci.yml to run lintr on your package.
 #
 # Produces a GitLab Code Quality report artifact.
 #
 # Optional variables:
 #   LINTR_ERROR_ON_LINT: "true" to fail on lint findings (default: "true")
-#   HAC_HACTIONS_REF:    Branch/tag/SHA of HACtions to fetch the lint script
+#   GLA_REF:    Branch/tag/SHA of gla to fetch the lint script
 #                        from (default: "main"). Pin to a tag or SHA for
 #                        reproducible builds — "main" tracks latest.
-#   HAC_HACTIONS_PROJECT_ID: Project ID of the HACtions repo (default set below).
-#   HAC_HACR_PROJECT_ID:    Project ID of the hacr package repo (default set below).
-#   HAC_HACR_PROJECT_PATH:  Git path of the hacr package repo
-#                           (default: "example-group/hacr").
-#   HAC_HACR_REF:           Branch/tag/SHA of hacr to install (default: "main").
-#   HAC_HACR_FETCH_METHOD:  "git" (default) or "archive". Git transport supports
+#   GLA_PROJECT_ID: Project ID of the gla repo (default set below).
+#   GLA_GLR_PROJECT_ID:    Project ID of the glr package repo (default set below).
+#   GLA_GLR_PROJECT_PATH:  Git path of the glr package repo
+#                           (default: "example-group/glr").
+#   GLA_GLR_REF:           Branch/tag/SHA of glr to install (default: "main").
+#   GLA_GLR_FETCH_METHOD:  "git" (default) or "archive". Git transport supports
 #                           branch/tag refs and avoids instance-specific archive
 #                           API restrictions. Use archive for commit-SHA pins.
 #                           Pin to a tag or SHA for reproducible builds.
 #
 # Security / Reproducibility:
-#   This template fetches and executes scripts/lint-codequality.R from HACtions
-#   and installs the hacr package at runtime. The default `main` refs are moving
-#   targets — consumers implicitly trust HACtions/hacr maintainers and accept that
+#   This template fetches and executes scripts/lint-codequality.R from gla
+#   and installs the glr package at runtime. The default `main` refs are moving
+#   targets — consumers implicitly trust gla/glr maintainers and accept that
 #   linting behavior may change between runs. For reproducible builds, **pin both
-#   HAC_HACTIONS_REF and HAC_HACR_REF to a tag or commit SHA**. This is the
+#   GLA_REF and GLA_GLR_REF to a tag or commit SHA**. This is the
 #   recommended configuration for production/release pipelines.
 #
 # The lint + Code Quality logic lives in scripts/lint-codequality.R (versioned,
-# lintable, testable). This template fetches it at runtime from HACtions.
+# lintable, testable). This template fetches it at runtime from gla.
 
-.hac-linting:
+.gla-linting:
   stage: lint
   variables:
-    HAC_DEP_MANAGER: "pak"
+    GLA_DEP_MANAGER: "pak"
     LINTR_ERROR_ON_LINT: "true"
-    # HAC_R_LIBS_USER is used in cache paths below. R_LIBS_USER is the variable
+    # GLA_R_LIBS_USER is used in cache paths below. R_LIBS_USER is the variable
     # R actually reads. Both MUST stay identical — if one changes, update the other.
-    HAC_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+    GLA_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
     # R_LIBS_USER ensures R subprocesses find packages in the cached location.
-    # Set directly (not via HAC_R_LIBS_USER) — GitLab intra-block expansion is unreliable.
+    # Set directly (not via GLA_R_LIBS_USER) — GitLab intra-block expansion is unreliable.
     R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
-    # HACtions project coordinates for script fetching
-    HAC_HACTIONS_PROJECT_ID: "2058"
-    HAC_HACTIONS_REF: "main"
-    # hacr package project ID and ref (example-group/hacr)
-    HAC_HACR_PROJECT_ID: "2071"
-    HAC_HACR_PROJECT_PATH: "example-group/hacr"
-    HAC_HACR_REF: "main"
-    HAC_HACR_FETCH_METHOD: "git"
+    # gla project coordinates for script fetching
+    GLA_PROJECT_ID: "2058"
+    GLA_REF: "main"
+    # glr package project ID and ref (example-group/glr)
+    GLA_GLR_PROJECT_ID: "2071"
+    GLA_GLR_PROJECT_PATH: "example-group/glr"
+    GLA_GLR_REF: "main"
+    GLA_GLR_FETCH_METHOD: "git"
   except:
     - gh-pages
   script:
     - mkdir -p "$R_LIBS_USER"
     # Install dependencies (lintr + helpers + the package itself)
     - |
-      if [[ "$HAC_DEP_MANAGER" == "renv" ]]; then
+      if [[ "$GLA_DEP_MANAGER" == "renv" ]]; then
         Rscript -e '
           if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
           source("renv/activate.R")
@@ -71,165 +71,165 @@
           pak::pak(pkg = ".", upgrade = FALSE, dependencies = TRUE)
         '
       fi
-    # Install the hacr helper package (provides hacr::lint_to_codequality).
-    # hacr lives in its own repo: example-group/hacr
+    # Install the glr helper package (provides glr::lint_to_codequality).
+    # glr lives in its own repo: example-group/glr
     # This block is dep-manager-agnostic by design: regardless of whether the
-    # consumer uses pak or renv above, hacr is always installed from a local source
-    # checkout + pak::local_install (which resolves hacr's declared Imports).
+    # consumer uses pak or renv above, glr is always installed from a local source
+    # checkout + pak::local_install (which resolves glr's declared Imports).
     # Git transport is the default because it works when an instance restricts the
     # otherwise-supported repository archive API for cross-project job tokens.
-    # It supports named branch/tag refs; set HAC_HACR_FETCH_METHOD=archive for
+    # It supports named branch/tag refs; set GLA_GLR_FETCH_METHOD=archive for
     # commit-SHA pins or the legacy archive-download behavior.
-    # Skip if hacr is already installed (e.g. when linting the hacr package itself).
+    # Skip if glr is already installed (e.g. when linting the glr package itself).
     - |
       set -euo pipefail
-      if Rscript -e 'if (requireNamespace("hacr", quietly = TRUE)) quit(status = 0) else quit(status = 1)'; then
-        echo "hacr already installed — skipping source fetch."
+      if Rscript -e 'if (requireNamespace("glr", quietly = TRUE)) quit(status = 0) else quit(status = 1)'; then
+        echo "glr already installed — skipping source fetch."
       else
-      trap 'rm -rf .hac-tmp' EXIT
-      mkdir -p .hac-tmp
-      case "$HAC_HACR_FETCH_METHOD" in
+      trap 'rm -rf .gla-tmp' EXIT
+      mkdir -p .gla-tmp
+      case "$GLA_GLR_FETCH_METHOD" in
         git)
           # Disable tracing before examining credential-bearing variables.
           set +x
-          unset HACR_GIT_USERNAME HACR_GIT_PASSWORD GIT_ASKPASS GIT_TERMINAL_PROMPT
+          unset GLR_GIT_USERNAME GLR_GIT_PASSWORD GIT_ASKPASS GIT_TERMINAL_PROMPT
           if [[ -n "${CI_JOB_TOKEN:-}" ]]; then
-            HACR_GIT_USERNAME=gitlab-ci-token
-            HACR_GIT_PASSWORD=$CI_JOB_TOKEN
+            GLR_GIT_USERNAME=gitlab-ci-token
+            GLR_GIT_PASSWORD=$CI_JOB_TOKEN
           elif [[ -n "${GITLAB_TOKEN:-}" ]]; then
-            HACR_GIT_USERNAME=oauth2
-            HACR_GIT_PASSWORD=$GITLAB_TOKEN
+            GLR_GIT_USERNAME=oauth2
+            GLR_GIT_PASSWORD=$GITLAB_TOKEN
           else
-            echo "ERROR: HAC_HACR_FETCH_METHOD=git requires GITLAB_TOKEN or CI_JOB_TOKEN" >&2
+            echo "ERROR: GLA_GLR_FETCH_METHOD=git requires GITLAB_TOKEN or CI_JOB_TOKEN" >&2
             exit 1
           fi
           command -v git >/dev/null || {
-            echo "ERROR: git is required for HAC_HACR_FETCH_METHOD=git" >&2
+            echo "ERROR: git is required for GLA_GLR_FETCH_METHOD=git" >&2
             exit 1
           }
           # Keep the job token out of the remote URL and command arguments.
           umask 077
-          HACR_ASKPASS=$(mktemp)
-          trap 'rm -f "$HACR_ASKPASS"; rm -rf .hac-tmp' EXIT
+          GLR_ASKPASS=$(mktemp)
+          trap 'rm -f "$GLR_ASKPASS"; rm -rf .gla-tmp' EXIT
           printf '%s\n' '#!/bin/sh' \
             'case "$1" in' \
-            '  *Username*) printf "%s\\n" "$HACR_GIT_USERNAME" ;;' \
-            '  *Password*) printf "%s\\n" "$HACR_GIT_PASSWORD" ;;' \
+            '  *Username*) printf "%s\\n" "$GLR_GIT_USERNAME" ;;' \
+            '  *Password*) printf "%s\\n" "$GLR_GIT_PASSWORD" ;;' \
             '  *) exit 1 ;;' \
-            'esac' > "$HACR_ASKPASS"
-          chmod 700 "$HACR_ASKPASS"
-          HACR_REPO_URL="${CI_SERVER_URL}/${HAC_HACR_PROJECT_PATH}.git"
-          LC_ALL=C GIT_ASKPASS="$HACR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
-            HACR_GIT_USERNAME="$HACR_GIT_USERNAME" HACR_GIT_PASSWORD="$HACR_GIT_PASSWORD" \
-            git clone --depth 1 --no-checkout "$HACR_REPO_URL" .hac-tmp/hacr
-          if [[ "$HAC_HACR_REF" =~ ^[0-9a-fA-F]{7,40}$ ]] && ! \
-            LC_ALL=C GIT_ASKPASS="$HACR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
-              HACR_GIT_USERNAME="$HACR_GIT_USERNAME" HACR_GIT_PASSWORD="$HACR_GIT_PASSWORD" \
-              git -C .hac-tmp/hacr ls-remote --exit-code origin \
-              "refs/heads/${HAC_HACR_REF}" "refs/tags/${HAC_HACR_REF}" >/dev/null; then
+            'esac' > "$GLR_ASKPASS"
+          chmod 700 "$GLR_ASKPASS"
+          GLR_REPO_URL="${CI_SERVER_URL}/${GLA_GLR_PROJECT_PATH}.git"
+          LC_ALL=C GIT_ASKPASS="$GLR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
+            GLR_GIT_USERNAME="$GLR_GIT_USERNAME" GLR_GIT_PASSWORD="$GLR_GIT_PASSWORD" \
+            git clone --depth 1 --no-checkout "$GLR_REPO_URL" .gla-tmp/glr
+          if [[ "$GLA_GLR_REF" =~ ^[0-9a-fA-F]{7,40}$ ]] && ! \
+            LC_ALL=C GIT_ASKPASS="$GLR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
+              GLR_GIT_USERNAME="$GLR_GIT_USERNAME" GLR_GIT_PASSWORD="$GLR_GIT_PASSWORD" \
+              git -C .gla-tmp/glr ls-remote --exit-code origin \
+              "refs/heads/${GLA_GLR_REF}" "refs/tags/${GLA_GLR_REF}" >/dev/null; then
             echo "ERROR: Git transport cannot reliably fetch a bare commit SHA." >&2
-            echo "  Set HAC_HACR_FETCH_METHOD=archive for commit-SHA pins," >&2
-            echo "  or use a named branch/tag with HAC_HACR_FETCH_METHOD=git." >&2
+            echo "  Set GLA_GLR_FETCH_METHOD=archive for commit-SHA pins," >&2
+            echo "  or use a named branch/tag with GLA_GLR_FETCH_METHOD=git." >&2
             exit 1
           fi
-          LC_ALL=C GIT_ASKPASS="$HACR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
-            HACR_GIT_USERNAME="$HACR_GIT_USERNAME" HACR_GIT_PASSWORD="$HACR_GIT_PASSWORD" \
-            git -C .hac-tmp/hacr fetch --depth 1 origin "$HAC_HACR_REF"
-          LC_ALL=C GIT_ASKPASS="$HACR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
-            HACR_GIT_USERNAME="$HACR_GIT_USERNAME" HACR_GIT_PASSWORD="$HACR_GIT_PASSWORD" \
-            git -C .hac-tmp/hacr checkout --detach FETCH_HEAD
+          LC_ALL=C GIT_ASKPASS="$GLR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
+            GLR_GIT_USERNAME="$GLR_GIT_USERNAME" GLR_GIT_PASSWORD="$GLR_GIT_PASSWORD" \
+            git -C .gla-tmp/glr fetch --depth 1 origin "$GLA_GLR_REF"
+          LC_ALL=C GIT_ASKPASS="$GLR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
+            GLR_GIT_USERNAME="$GLR_GIT_USERNAME" GLR_GIT_PASSWORD="$GLR_GIT_PASSWORD" \
+            git -C .gla-tmp/glr checkout --detach FETCH_HEAD
           ;;
         archive)
           set +x
           if [[ -n "${GITLAB_TOKEN:-}" ]]; then
-            HACR_AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
+            GLR_AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
           elif [[ -n "${CI_JOB_TOKEN:-}" ]]; then
-            HACR_AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN}"
+            GLR_AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN}"
           else
-            echo "ERROR: HAC_HACR_FETCH_METHOD=archive requires GITLAB_TOKEN or CI_JOB_TOKEN" >&2
+            echo "ERROR: GLA_GLR_FETCH_METHOD=archive requires GITLAB_TOKEN or CI_JOB_TOKEN" >&2
             exit 1
           fi
-          HACR_URL="${CI_API_V4_URL}/projects/${HAC_HACR_PROJECT_ID}/repository/archive.tar.gz?sha=${HAC_HACR_REF}"
-          HTTP_CODE=$(curl -sS -w '%{http_code}' --header "$HACR_AUTH_HEADER" \
-            "$HACR_URL" -o .hac-tmp/hacr.tar.gz) || true
+          GLR_URL="${CI_API_V4_URL}/projects/${GLA_GLR_PROJECT_ID}/repository/archive.tar.gz?sha=${GLA_GLR_REF}"
+          HTTP_CODE=$(curl -sS -w '%{http_code}' --header "$GLR_AUTH_HEADER" \
+            "$GLR_URL" -o .gla-tmp/glr.tar.gz) || true
           HTTP_CODE="${HTTP_CODE:-000}"
           [[ "$HTTP_CODE" =~ ^[0-9]+$ ]] || HTTP_CODE=000
           if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
-            echo "ERROR: Failed to fetch hacr archive (HTTP $HTTP_CODE)" >&2
-            echo "  URL: $HACR_URL" >&2
-            echo "  Check HAC_HACR_PROJECT_ID ($HAC_HACR_PROJECT_ID) and HAC_HACR_REF ($HAC_HACR_REF)." >&2
+            echo "ERROR: Failed to fetch glr archive (HTTP $HTTP_CODE)" >&2
+            echo "  URL: $GLR_URL" >&2
+            echo "  Check GLA_GLR_PROJECT_ID ($GLA_GLR_PROJECT_ID) and GLA_GLR_REF ($GLA_GLR_REF)." >&2
             exit 1
           fi
-          if [[ ! -s .hac-tmp/hacr.tar.gz ]]; then
-            echo "ERROR: Fetched hacr archive is empty" >&2; exit 1
+          if [[ ! -s .gla-tmp/glr.tar.gz ]]; then
+            echo "ERROR: Fetched glr archive is empty" >&2; exit 1
           fi
-          mkdir -p .hac-tmp/hacr
-          tar xzf .hac-tmp/hacr.tar.gz -C .hac-tmp/hacr --strip-components=1
+          mkdir -p .gla-tmp/glr
+          tar xzf .gla-tmp/glr.tar.gz -C .gla-tmp/glr --strip-components=1
           ;;
         *)
-          echo "ERROR: HAC_HACR_FETCH_METHOD must be git or archive" >&2
+          echo "ERROR: GLA_GLR_FETCH_METHOD must be git or archive" >&2
           exit 1
           ;;
       esac
-      # Use pak::local_install to resolve hacr's declared Imports (e.g. digest)
+      # Use pak::local_install to resolve glr's declared Imports (e.g. digest)
       # rather than install.packages(repos=NULL) which skips dependencies.
       Rscript -e '
         if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
-        pak::local_install(".hac-tmp/hacr", upgrade = FALSE)
+        pak::local_install(".gla-tmp/glr", upgrade = FALSE)
       '
-      rm -rf .hac-tmp
+      rm -rf .gla-tmp
       fi
-    # Fetch and run the lint + Code Quality script from HACtions
+    # Fetch and run the lint + Code Quality script from gla
     - |
       set -euo pipefail
       set +x
-      LINT_SCRIPT_URL="${CI_API_V4_URL}/projects/${HAC_HACTIONS_PROJECT_ID}/repository/files/scripts%2Flint-codequality.R/raw?ref=${HAC_HACTIONS_REF}"
+      LINT_SCRIPT_URL="${CI_API_V4_URL}/projects/${GLA_PROJECT_ID}/repository/files/scripts%2Flint-codequality.R/raw?ref=${GLA_REF}"
       if [[ -n "${GITLAB_TOKEN:-}" ]]; then
-        HAC_AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
+        GLA_AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
       elif [[ -n "${CI_JOB_TOKEN:-}" ]]; then
-        HAC_AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN}"
+        GLA_AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN}"
       else
         echo "ERROR: lint script retrieval requires GITLAB_TOKEN or CI_JOB_TOKEN" >&2
         exit 1
       fi
-      HTTP_CODE=$(curl -sS -w '%{http_code}' --header "$HAC_AUTH_HEADER" \
-        "$LINT_SCRIPT_URL" -o .hac-lint-codequality.R) || true
+      HTTP_CODE=$(curl -sS -w '%{http_code}' --header "$GLA_AUTH_HEADER" \
+        "$LINT_SCRIPT_URL" -o .gla-lint-codequality.R) || true
       HTTP_CODE="${HTTP_CODE:-000}"
       # Ensure HTTP_CODE is numeric (curl can emit unexpected output on failure)
       [[ "$HTTP_CODE" =~ ^[0-9]+$ ]] || HTTP_CODE=000
       if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
-        echo "ERROR: Failed to fetch lint-codequality.R from HACtions (HTTP $HTTP_CODE)" >&2
+        echo "ERROR: Failed to fetch lint-codequality.R from gla (HTTP $HTTP_CODE)" >&2
         echo "  URL: $LINT_SCRIPT_URL" >&2
-        echo "  Check HAC_HACTIONS_PROJECT_ID and HAC_HACTIONS_REF values." >&2
+        echo "  Check GLA_PROJECT_ID and GLA_REF values." >&2
         exit 1
       fi
       # Validate fetched content: must be non-empty and look like an R script
       # (guards against empty responses, proxy HTML pages, or JSON error bodies)
-      if [[ ! -s .hac-lint-codequality.R ]]; then
+      if [[ ! -s .gla-lint-codequality.R ]]; then
         echo "ERROR: Fetched lint-codequality.R is empty" >&2; exit 1
       fi
       # Strip UTF-8 BOM if present (Rscript cannot parse a leading BOM).
       # Done before the shebang check so we can use a plain ASCII grep pattern
       # (avoids grep hex-escape portability issues across GNU/BSD builds).
       # NOTE: \xEF\xBB\xBF escapes require GNU sed (standard on Linux CI runners).
-      sed -i '1s/^\xEF\xBB\xBF//' .hac-lint-codequality.R
+      sed -i '1s/^\xEF\xBB\xBF//' .gla-lint-codequality.R
       # Anchored shebang check on the already-cleaned file: require #! followed
       # by Rscript. Rejects HTML error pages or JSON bodies that happen to
       # contain "Rscript" elsewhere on line 1.
       # NOTE: Does not catch HTTP-200 error pages that lack "Rscript" entirely
       # — those are caught by the non-empty check above + runtime parse errors.
-      if ! head -1 .hac-lint-codequality.R | grep -qE '^#!.*Rscript'; then
+      if ! head -1 .gla-lint-codequality.R | grep -qE '^#!.*Rscript'; then
         echo "ERROR: Fetched file does not look like an R script (shebang missing or malformed)" >&2
-        echo "First line: $(head -1 .hac-lint-codequality.R)" >&2; exit 1
+        echo "First line: $(head -1 .gla-lint-codequality.R)" >&2; exit 1
       fi
-      Rscript .hac-lint-codequality.R
+      Rscript .gla-lint-codequality.R
   cache:
     - key: cache-$CI_COMMIT_REF_SLUG
       fallback_keys:
         - cache-$CI_DEFAULT_BRANCH
         - cache-default
       paths:
-        - ${HAC_R_LIBS_USER}
+        - ${GLA_R_LIBS_USER}
   artifacts:
     when: always
     reports:
@@ -237,4 +237,4 @@
         - lintr_results.json
 
 linting:
-  extends: .hac-linting
+  extends: .gla-linting

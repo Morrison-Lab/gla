@@ -1,4 +1,4 @@
-# Runtime-fetched scripts (consumer repos only, not tracked in HACtions itself)
+# Runtime-fetched scripts (consumer repos only, not tracked in gla itself)
 # The CI bot fetches these into .gitlab/scripts/ at job runtime via the API.
 # They must NOT be committed to this repo — the canonical source is scripts/.
 .gitlab/scripts/

@@ -47,17 +47,17 @@ curl() {
 }
 
 @test "review agent setting accepts only exact boolean values" {
-  run bash -c 'source "$1"; validate_boolean HAC_REVIEW_AGENT true' _ "$VALIDATE_SCRIPT"
+  run bash -c 'source "$1"; validate_boolean GLA_REVIEW_AGENT true' _ "$VALIDATE_SCRIPT"
   [ "$status" -eq 0 ]
-  run bash -c 'source "$1"; validate_boolean HAC_REVIEW_AGENT false' _ "$VALIDATE_SCRIPT"
+  run bash -c 'source "$1"; validate_boolean GLA_REVIEW_AGENT false' _ "$VALIDATE_SCRIPT"
   [ "$status" -eq 0 ]
-  run bash -c 'source "$1"; validate_boolean HAC_REVIEW_AGENT 1' _ "$VALIDATE_SCRIPT"
+  run bash -c 'source "$1"; validate_boolean GLA_REVIEW_AGENT 1' _ "$VALIDATE_SCRIPT"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"HAC_REVIEW_AGENT must be exactly true or false"* ]]
+  [[ "$output" == *"GLA_REVIEW_AGENT must be exactly true or false"* ]]
 }
 
 @test "review responses are capped and normalized before transcript append" {
-  run grep -F 'MAX_REVIEW_RESPONSE_CHARS=${HAC_MAX_REVIEW_RESPONSE_CHARS:-200000}' "$REVIEW_SCRIPT"
+  run grep -F 'MAX_REVIEW_RESPONSE_CHARS=${GLA_MAX_REVIEW_RESPONSE_CHARS:-200000}' "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]
   run grep -F -- '--max-filesize "$MAX_REVIEW_RESPONSE_CHARS"' "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]
@@ -77,7 +77,7 @@ curl() {
   local curl_log="$test_dir/curl.log"
 
   ruby -ryaml -e '
-    puts YAML.load_file(ARGV[0]).fetch(".hac-claude-review").fetch("before_script")[1]
+    puts YAML.load_file(ARGV[0]).fetch(".gla-claude-review").fetch("before_script")[1]
   ' "$TEMPLATE" > "$fetch_script"
 
   run bash -c '
@@ -88,8 +88,8 @@ curl() {
     export CI_JOB_TOKEN="mock-job-token"
     export GITLAB_TOKEN="mock-pat-token"
     export CI_API_V4_URL="https://gitlab.example/api/v4"
-    export HAC_HACTIONS_PROJECT_ID="2058"
-    export HAC_HACTIONS_REF="main"
+    export GLA_PROJECT_ID="2058"
+    export GLA_REF="main"
 
     curl() {
       local header=""
@@ -165,7 +165,7 @@ curl() {
   local curl_log="$test_dir/curl.log"
 
   ruby -ryaml -e '
-    puts YAML.load_file(ARGV[0]).fetch(".hac-claude-review").fetch("before_script")[1]
+    puts YAML.load_file(ARGV[0]).fetch(".gla-claude-review").fetch("before_script")[1]
   ' "$TEMPLATE" > "$fetch_script"
 
   run bash -c '
@@ -176,8 +176,8 @@ curl() {
     export CI_JOB_TOKEN="mock-job-token"
     export GITLAB_TOKEN="mock-pat-token"
     export CI_API_V4_URL="https://gitlab.example/api/v4"
-    export HAC_HACTIONS_PROJECT_ID="2058"
-    export HAC_HACTIONS_REF="main"
+    export GLA_PROJECT_ID="2058"
+    export GLA_REF="main"
 
     curl() {
       local header=""
@@ -358,9 +358,9 @@ curl() {
 }
 
 @test "Claude companion review is opt-in and cannot trigger auto-fixes" {
-  run grep -F 'HAC_CLAUDE_COMPANION_REVIEW == "true"' "$TEMPLATE"
+  run grep -F 'GLA_CLAUDE_COMPANION_REVIEW == "true"' "$TEMPLATE"
   [ "$status" -eq 0 ]
-  run grep -F 'REVIEW_MODEL=databricks-claude-sonnet-4-6 HAC_REVIEWER_ID=claude-companion HAC_REVIEW_AUTO_FIX=false HAC_REVIEW_INCLUDE_LEGACY_THREADS=false' "$TEMPLATE"
+  run grep -F 'REVIEW_MODEL=databricks-claude-sonnet-4-6 GLA_REVIEWER_ID=claude-companion GLA_REVIEW_AUTO_FIX=false GLA_REVIEW_INCLUDE_LEGACY_THREADS=false' "$TEMPLATE"
   [ "$status" -eq 0 ]
 }
 
@@ -397,12 +397,12 @@ curl() {
 
 @test "review bootstrap fetches every helper sourced by claude-review.sh" {
   run ruby -ryaml -e '
-    template = YAML.load_file(ARGV[0]).fetch(".hac-claude-review")
+    template = YAML.load_file(ARGV[0]).fetch(".gla-claude-review")
     before_script = template.fetch("before_script").join("\n")
     script = File.binread(ARGV[1]).force_encoding(Encoding::BINARY)
     sourced = script.scan(%r{source "\$\{SCRIPT_DIR\}/lib/([^" ]+)"}).flatten
     missing = sourced.reject do |library|
-      fetch = "fetch_hactions_file scripts%2Flib%2F#{library} .gitlab/scripts/lib/#{library}"
+      fetch = "fetch_gla_file scripts%2Flib%2F#{library} .gitlab/scripts/lib/#{library}"
       source_file = File.join(File.dirname(ARGV[1]), "lib", library)
       File.file?(source_file) && before_script.include?(fetch)
     end
@@ -413,7 +413,7 @@ curl() {
 
 @test "command-level companion model overrides the project reviewer model" {
   run env REVIEW_MODEL=databricks-gpt-5-6-terra bash -c \
-    'REVIEW_MODEL=databricks-claude-sonnet-4-6 HAC_REVIEW_AUTO_FIX=false sh -c '\''printf "%s %s\n" "$REVIEW_MODEL" "$HAC_REVIEW_AUTO_FIX"'\'''
+    'REVIEW_MODEL=databricks-claude-sonnet-4-6 GLA_REVIEW_AUTO_FIX=false sh -c '\''printf "%s %s\n" "$REVIEW_MODEL" "$GLA_REVIEW_AUTO_FIX"'\'''
   [ "$status" -eq 0 ]
   [ "$output" = "databricks-claude-sonnet-4-6 false" ]
 }
@@ -702,18 +702,18 @@ curl() {
 }
 
 @test "prior-review prompt budgets are validated" {
-  run grep -F 'validate_nonnegative_integer "HAC_MAX_PRIOR_REVIEW_CHARS"' "$REVIEW_SCRIPT"
+  run grep -F 'validate_nonnegative_integer "GLA_MAX_PRIOR_REVIEW_CHARS"' "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]
-  run grep -F 'validate_nonnegative_integer "HAC_MAX_AUTHOR_RESPONSE_CHARS"' "$REVIEW_SCRIPT"
+  run grep -F 'validate_nonnegative_integer "GLA_MAX_AUTHOR_RESPONSE_CHARS"' "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]
-  run grep -F 'validate_nonnegative_integer "HAC_MAX_REVIEW_HISTORY_CHARS"' "$REVIEW_SCRIPT"
+  run grep -F 'validate_nonnegative_integer "GLA_MAX_REVIEW_HISTORY_CHARS"' "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]
 }
 
 @test "prior review context retains historical review rounds" {
   run grep -F 'Keep older review rounds as well as the latest one' "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]
-  run grep -F 'HAC_MAX_REVIEW_HISTORY_CHARS' "$REVIEW_SCRIPT"
+  run grep -F 'GLA_MAX_REVIEW_HISTORY_CHARS' "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]
   run grep -F 'AUTHOR_RESPONSE_TIMELINE' "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]

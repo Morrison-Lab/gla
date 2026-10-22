@@ -15,7 +15,7 @@ setup() {
   # Block index 2 is the scope-resolution step (0 fetch, 1 checksum, 2 scope,
   # 3 allowlist, 4 run). Extracted rather than duplicated so the test cannot
   # drift from the template.
-  ruby -ryaml -e 'puts YAML.load_file(ARGV[0]).fetch(".hac-check-phi").fetch("script")[2]' \
+  ruby -ryaml -e 'puts YAML.load_file(ARGV[0]).fetch(".gla-check-phi").fetch("script")[2]' \
     "$TEMPLATE" > "$SCRIPT"
 
   REMOTE="$BATS_TEST_TMPDIR/remote.git"
@@ -50,12 +50,12 @@ setup() {
 # "the script never wrote it" cannot be mistaken for "the script chose a
 # whole-tree scan".
 run_scope() {
-  # The block derives its scratch dir as ${TMPDIR:-/tmp}/hac-phi-${CI_JOB_ID:-$$},
+  # The block derives its scratch dir as ${TMPDIR:-/tmp}/gla-phi-${CI_JOB_ID:-$$},
   # deliberately outside the checkout, so the test pins both to read it back.
   export TMPDIR="$BATS_TEST_TMPDIR" CI_JOB_ID=bats
   ( cd "$WORK" && bash "$SCRIPT" >/dev/null 2>&1 )
   scope_status=$?
-  local ref_file="$BATS_TEST_TMPDIR/hac-phi-bats/base-ref"
+  local ref_file="$BATS_TEST_TMPDIR/gla-phi-bats/base-ref"
   if [ -f "$ref_file" ]; then
     scope_base=$(cat "$ref_file")
   else

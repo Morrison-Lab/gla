@@ -5,7 +5,7 @@
 # Requires: renv.lock and renv/activate.R committed to your repo.
 
 include:
-  - project: 'example-group/HACtions'
+  - project: 'example-group/gla'
     ref: main
     file:
       - '/templates/workflow.yml'
@@ -27,9 +27,9 @@ image: rocker/verse:latest
 variables:
   GIT_DEPTH: 10
   # Dependency manager: "pak" (default) or "renv"
-  HAC_DEP_MANAGER: "renv"
+  GLA_DEP_MANAGER: "renv"
   # Library path for installed packages
-  HAC_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+  GLA_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
   R_LIBS: "${CI_PROJECT_DIR}/ci/lib:${R_LIBS}"
   R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
   # renv paths
@@ -49,7 +49,7 @@ cache:
     - ${RENV_PATHS_CACHE}
     - ${RENV_PATHS_LIBRARY}
     - ${RENV_PATHS_ROOT}
-    - ${HAC_R_LIBS_USER}
+    - ${GLA_R_LIBS_USER}
 
 stages:
   - build
