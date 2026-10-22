@@ -117,7 +117,7 @@ It is not needed to download the shared gla scripts.
 ### Step 2a: Allow the consumer project to fetch gla scripts
 
 gla is private, so a gla Maintainer must add the consumer project to
-gla' CI/CD job token allowlist:
+gla's CI/CD job token allowlist:
 
 1. In the gla project, go to **Settings → CI/CD**.
 2. Expand **Job token permissions** (**Token Access** on older GitLab
@@ -328,7 +328,7 @@ production repositories.
 |---------|-------------|-----|
 | "No TRIGGER_PAYLOAD file found" | Pipeline not triggered via webhook URL | Ensure the webhook URL uses the `/ref/.../trigger/pipeline` format |
 | "401 Unauthorized" from GitLab API | `GITLAB_TOKEN` invalid or expired | Regenerate the project access token (Step 2) |
-| "404 Not Found" fetching a script from gla | Consumer project is not on gla' CI/CD job token allowlist, or the pipeline-associated user lacks access to gla | Have a gla Maintainer add the project under **Settings → CI/CD → Job token permissions** (**Token Access** on older versions) and verify the pipeline identity's access (Step 2a) |
+| "404 Not Found" fetching a script from gla | Consumer project is not on gla's CI/CD job token allowlist, or the pipeline-associated user lacks access to gla | Have a gla Maintainer add the project under **Settings → CI/CD → Job token permissions** (**Token Access** on older versions) and verify the pipeline identity's access (Step 2a) |
 | "401" from Databricks/Anthropic | `ANTHROPIC_API_KEY` (Databricks PAT) invalid or expired | Regenerate the PAT in Databricks (Step 1) |
 | "404" or model not found | `ANTHROPIC_BASE_URL` wrong or model not enabled | Verify the URL ends in `/serving-endpoints` and the model exists in your workspace |
 | `git push` fails | Token lacks push permission | Ensure the project access token has `write_repository` scope and Developer role |

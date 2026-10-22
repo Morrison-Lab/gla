@@ -10,7 +10,7 @@
 #
 # Fetching scripts from gla does NOT need GITLAB_TOKEN. It uses the
 # built-in CI_JOB_TOKEN, which works cross-project once your project is added
-# to gla' allowlist (gla > Settings > CI/CD > Job token permissions).
+# to gla's allowlist (gla > Settings > CI/CD > Job token permissions).
 # GitLab only accepts a job token under the `JOB-TOKEN:` header -- sending it as
 # `PRIVATE-TOKEN:` returns 404. See issue #52 for the same bug in
 # version-check.yml.
