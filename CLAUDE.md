@@ -17,3 +17,7 @@ Working facts for anyone (human or `@claude`) developing this repo itself.
   exists.
   When the MR is opened after the push, the job finds no open MR and skips.
   Mitigation: post a self-review manually as an MR comment.
+- **GitHub Actions review**: pull requests on GitHub are reviewed by
+  `.github/workflows/claude-review.yml`, a caller of `Morrison-Lab/gha`;
+  a trusted author's `/review` comment re-runs it.
+  This is separate from the GitLab `claude-review` job above.

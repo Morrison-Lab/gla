@@ -1,0 +1,167 @@
+# Caller for Morrison-Lab/gha's reusable Claude Code review.
+# Reviews each PR, and `/review` as the first word of a PR comment by a
+# trusted author dispatches a review of that PR. See gha's
+# claude-code-review.yml for the inputs.
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+  issue_comment: # zizmor: ignore[dangerous-triggers] -- runs the pinned reusable workflow only for trusted authors; checks out no PR code
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull request number to review'
+        required: true
+        type: string
+
+jobs:
+  dispatch-on-comment:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/review') &&
+      (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write        # dispatch this workflow via `gh workflow run`
+      issues: write         # acknowledge the /review comment
+      pull-requests: read
+    steps:
+      - name: Parse this workflow's ref
+        id: this-wf
+        uses: Morrison-Lab/gha/.github/actions/parse-workflow-ref@v2
+        with:
+          workflow-ref: ${{ github.workflow_ref }}
+
+      - name: Classify whether this PR edits workflow YAML
+        id: wf-edits
+        continue-on-error: true
+        uses: Morrison-Lab/gha/.github/actions/detect-pr-workflow-edits@v2
+        with:
+          pr-number: ${{ github.event.issue.number }}
+          caller-workflow-path: ${{ steps.this-wf.outputs.path }}
+
+      - name: Dispatch a review for the commented PR
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          WF_PATH: ${{ steps.this-wf.outputs.path }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          WF_EDITS: ${{ steps.wf-edits.outputs.workflow_edits }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          post_notice() {
+            if printf '%s' "$1" | jq -Rs '{body: .}' \
+                 | gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+                     --method POST \
+                     -H "Content-Type: application/json" \
+                     --input - > /dev/null; then
+              echo "notice_posted=true" >> "$GITHUB_OUTPUT" \
+                || echo "::warning::Could not record notice delivery for PR #$PR_NUMBER."
+            else
+              echo "::warning::Could not post a notice to PR #$PR_NUMBER."
+            fi
+          }
+          shopt -s nocasematch
+          if [[ ! "$COMMENT_BODY" =~ ^/review([[:space:]]|$) ]]; then
+            shopt -u nocasematch
+            echo "Comment does not start with a standalone '/review' command; skipping dispatch."
+            post_notice ":grey_question: No review was dispatched: the command has to be \`/review\` on its own, followed by whitespace or the end of the line."
+            exit 0
+          fi
+          shopt -u nocasematch
+          WF_FILE=$(basename "$WF_PATH")
+          if ! PR_JSON=$(gh api "repos/$REPO/pulls/$PR_NUMBER"); then
+            echo "::error::Could not read PR #$PR_NUMBER; no review was dispatched."
+            post_notice ":warning: \`/review\` received, but reading this PR failed, so no review was dispatched. See the [dispatch run]($RUN_URL)."
+            exit 1
+          fi
+          PR_BRANCH=$(jq -r '.head.ref' <<< "$PR_JSON")
+          PR_HEAD_REPO=$(jq -r '.head.repo.full_name' <<< "$PR_JSON")
+          echo "Dispatching $WF_FILE to review PR #$PR_NUMBER ($PR_BRANCH) (/review comment)."
+          DISPATCH_REF="$PR_BRANCH"
+          if [ "$PR_HEAD_REPO" != "$REPO" ]; then
+            echo "::notice::PR #$PR_NUMBER is from a fork ($PR_HEAD_REPO); dispatching $WF_FILE from $DEFAULT_BRANCH."
+            DISPATCH_REF="$DEFAULT_BRANCH"
+          fi
+          if [ -z "$PR_BRANCH" ] || [ "$PR_BRANCH" = "null" ]; then
+            echo "::notice::PR #$PR_NUMBER has no resolvable head ref; dispatching $WF_FILE from $DEFAULT_BRANCH."
+            DISPATCH_REF="$DEFAULT_BRANCH"
+          fi
+          if [ "$WF_EDITS" = "true" ]; then
+            echo "::notice::PR #$PR_NUMBER edits workflow files; dispatching $WF_FILE from $DEFAULT_BRANCH so GitHub executes trusted workflow YAML (gha#598)."
+            DISPATCH_REF="$DEFAULT_BRANCH"
+          elif [ "$WF_EDITS" != "false" ]; then
+            echo "::notice::Could not classify PR #$PR_NUMBER's changed files; dispatching $WF_FILE from $DEFAULT_BRANCH so GitHub executes trusted workflow YAML (gha#598)."
+            DISPATCH_REF="$DEFAULT_BRANCH"
+          fi
+          if [ -z "$DISPATCH_REF" ] || [ "$DISPATCH_REF" = "null" ]; then
+            echo "::error::Could not resolve a ref to dispatch $WF_FILE for PR #$PR_NUMBER."
+            post_notice ":warning: \`/review\` received, but no branch could be resolved to dispatch the review from, so none started. See the [dispatch run]($RUN_URL)."
+            exit 1
+          fi
+          if ! gh workflow run "$WF_FILE" --repo "$REPO" --ref "$DISPATCH_REF" -f pr_number="$PR_NUMBER"; then
+            echo "::error::Dispatching $WF_FILE for PR #$PR_NUMBER failed; a review may or may not have started."
+            post_notice ":warning: \`/review\` received, but the dispatch call failed, so a review has probably not started. See the [dispatch run]($RUN_URL)."
+            exit 1
+          fi
+          echo "dispatched=true" >> "$GITHUB_OUTPUT" \
+            || echo "::warning::Could not record the dispatch for PR #$PR_NUMBER."
+          post_notice ":mag: \`/review\` received --- dispatched a Claude review of this PR (see the [dispatch run]($RUN_URL)). The review posts as its own comment when it finishes."
+
+      - name: Report a dispatch outcome that never reached the PR
+        if: ${{ always() && steps.dispatch.outputs.notice_posted != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DISPATCHED: ${{ steps.dispatch.outputs.dispatched }}
+        run: |
+          set -uo pipefail
+          if [ "$DISPATCHED" = "true" ]; then
+            body=":warning: \`/review\` received and a review was dispatched, but this job could not confirm that on the PR. The review may still post its own comment. See the [dispatch run]($RUN_URL)."
+          else
+            body=":warning: \`/review\` received, but this job could not confirm that a review started. See the [dispatch run]($RUN_URL)."
+          fi
+          printf '%s' "$body" | jq -Rs '{body: .}' \
+            | gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+                --method POST \
+                -H "Content-Type: application/json" \
+                --input - > /dev/null \
+            || echo "::warning::Could not post the dispatch-outcome notice."
+
+
+  review:
+    if: github.event_name != 'issue_comment'
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      actions: read   # lets the reviewer read CI status
+      checks: read
+    uses: Morrison-Lab/gha/.github/workflows/claude-code-review.yml@v3
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    with:
+      pr-number: ${{ github.event.pull_request.number || inputs.pr_number }}
+      prompt-addendum: |
+        This repository holds the GitLab CI templates, scripts and documentation
+        for running Claude in GitLab CI: `templates/`,
+        `scripts/`, `.gitlab/`, `tests/` (bats) and `docs/`. It is public, so check
+        that a diff adds no internal hostnames, project IDs, tokens or private
+        repository names, and that pinned commit SHAs name commits of this repository.
+        Fact-check shell logic and the claims in `docs/` and `CLAUDE.md` against the code.
+        Your verdict is about the diff.
+        Do not turn check-run state into a finding: a check still in progress,
+        your own `review / claude-review` job, or `require-clean-verdict`
+        failing because it read an earlier review's verdict.
+        A check that has completed with a failure caused by this diff is still a finding.

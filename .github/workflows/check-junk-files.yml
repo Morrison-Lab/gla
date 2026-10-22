@@ -1,0 +1,21 @@
+# Thin caller of Morrison-Lab/gha's reusable junk-file check.
+#
+# Fails when operating-system or editor detritus (`.DS_Store`, `.Rproj.user`,
+# `Thumbs.db`, ...) is tracked. It reads the index rather than the diff, so a
+# file committed long ago is still reported.
+name: Check junk files
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches:
+      - main
+
+jobs:
+  check-junk-files:
+    permissions:
+      contents: read
+    uses: Morrison-Lab/gha/.github/workflows/check-junk-files.yml@v2
+    with:
+      patterns: ".DS_Store, ._*, .Rproj.user, .Rhistory, .RData, .httr-oauth, .quarto, Thumbs.db, desktop.ini"
