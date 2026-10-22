@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # =============================================================================
-# Regression tests for HACtions#51: a content-free LLM response must not be
+# Regression tests for gla#51: a content-free LLM response must not be
 # treated as a clean review.
 # =============================================================================
 # The function below mirrors the response-validation logic added to
@@ -45,7 +45,7 @@ is_usable_response() {
 }
 
 @test "a bare JSON array of reasoning blocks (the opus-5 case) is unusable" {
-  # Regression: HACtions#51 observed a 27,720-byte raw JSON array of
+  # Regression: gla#51 observed a 27,720-byte raw JSON array of
   # {"type": "reasoning", "signature": "..."} blocks with no text at all.
   run is_usable_response '[{"type":"reasoning","signature":"deadbeef"}]'
   [ "$status" -eq 1 ]

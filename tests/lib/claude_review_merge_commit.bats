@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # =============================================================================
-# Regression tests for HACtions#74: claude-review.sh must not skip MR heads
-# that are merge commits by default, while supporting opt-in HAC_SKIP_MERGE_COMMITS.
+# Regression tests for gla#74: claude-review.sh must not skip MR heads
+# that are merge commits by default, while supporting opt-in GLA_SKIP_MERGE_COMMITS.
 # =============================================================================
 
 setup() {
@@ -15,8 +15,8 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "claude-review.sh guards merge-commit skip behind HAC_SKIP_MERGE_COMMITS" {
-  run grep -F 'if [[ "${HAC_SKIP_MERGE_COMMITS:-false}" == "true"' "$REVIEW_SCRIPT"
+@test "claude-review.sh guards merge-commit skip behind GLA_SKIP_MERGE_COMMITS" {
+  run grep -F 'if [[ "${GLA_SKIP_MERGE_COMMITS:-false}" == "true"' "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]
 }
 
@@ -132,12 +132,12 @@ CURL_STUB
   export GITLAB_TOKEN="mock-token"
   export ANTHROPIC_BASE_URL="https://llm.example/api"
   export ANTHROPIC_AUTH_TOKEN="mock-llm-token"
-  export HAC_REVIEW_AGENT="true"
+  export GLA_REVIEW_AGENT="true"
   export MOCK_AGENT_ROUNDS="true"
   export MOCK_AGENT_STATE="$test_tmp/agent-calls"
   export CI_PIPELINE_SOURCE="push"
   export CI_PIPELINE_URL="https://gitlab.example/pipelines/1"
-  unset HAC_SKIP_MERGE_COMMITS
+  unset GLA_SKIP_MERGE_COMMITS
 
   run "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]
@@ -155,7 +155,7 @@ CURL_STUB
   [ "$status" -eq 0 ]
 }
 
-@test "merge-commit MR head skips auto-review when HAC_SKIP_MERGE_COMMITS=true" {
+@test "merge-commit MR head skips auto-review when GLA_SKIP_MERGE_COMMITS=true" {
   local test_tmp="$BATS_TEST_TMPDIR/merge_commit_skip"
   mkdir -p "$test_tmp"
   local repo_dir="$test_tmp/repo"
@@ -194,10 +194,10 @@ CURL_STUB
   export CI_API_V4_URL="https://gitlab.example/api/v4"
   export GITLAB_TOKEN="mock-token"
   export CI_PIPELINE_SOURCE="push"
-  export HAC_SKIP_MERGE_COMMITS="true"
+  export GLA_SKIP_MERGE_COMMITS="true"
 
   run "$REVIEW_SCRIPT"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"HAC_SKIP_MERGE_COMMITS is enabled and merge commit detected"* ]]
+  [[ "$output" == *"GLA_SKIP_MERGE_COMMITS is enabled and merge commit detected"* ]]
   [[ "$output" == *"skipping auto-review."* ]]
 }

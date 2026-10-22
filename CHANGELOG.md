@@ -1,10 +1,10 @@
 # Changelog
 
-All notable changes to HACtions are documented here.
+All notable changes to gla are documented here.
 
 This project uses **major version tags** (`v1`, `v2`, …) for breaking changes.
 Non-breaking improvements land on `main` continuously. We use major-only tags
-(not full semver) because HACtions is consumed via GitLab's `ref:` mechanism,
+(not full semver) because gla is consumed via GitLab's `ref:` mechanism,
 where floating major tags (like Docker's `image: node:20`) are the standard
 pattern — consumers pin to a major for stability and get non-breaking fixes
 automatically via `ref: main`.
@@ -30,7 +30,7 @@ automatically via `ref: main`.
   or with a regex in `.gitlab/phi-allowlist.txt`.
 
   The scanner is `Morrison-Lab/gha`'s `check-phi.py`, fetched from GitHub at a
-  **pinned commit SHA** and checksum-verified before it is executed. HACtions
+  **pinned commit SHA** and checksum-verified before it is executed. gla
   does not reimplement it: the script is platform-agnostic, so this template
   only maps GitLab CI context onto its `PHI_*` environment contract. The two
   repos remain separate -- GitLab CI cannot consume a GitHub composite action,
@@ -45,7 +45,7 @@ automatically via `ref: main`.
 
 - **GPT-5.6 automatic review with optional Claude companion review.** Automatic
   MR review now defaults to `databricks-gpt-5-6-sol`. Set `REVIEW_MODEL` for a
-  different primary reviewer, or set `HAC_CLAUDE_COMPANION_REVIEW=true` to add
+  different primary reviewer, or set `GLA_CLAUDE_COMPANION_REVIEW=true` to add
   an independent Claude Sonnet 4.6 pass. The `@claude` response agent is
   unchanged, and existing `CLAUDE_MODEL` review overrides remain compatible.
 
@@ -87,7 +87,7 @@ automatically via `ref: main`.
   the working tree by `claude.yml`'s `before_script`; a bare `git add -A`
   staged them alongside the LLM's real edits, so every bot-authored commit
   carried 17 unrelated files. The scope guard already warned about this but
-  didn't block it. See [issue #48](https://gitlab.example.com/example-group/HACtions/-/work_items/48).
+  didn't block it. See [issue #48](https://gitlab.example.com/example-group/gla/-/work_items/48).
 
 ## [v2] — 2025-06-17
 
@@ -100,7 +100,7 @@ automatically via `ref: main`.
   -  - claude-respond
   +  - claude
   ```
-  See [MR !25](https://gitlab.example.com/example-group/HACtions/-/merge_requests/25).
+  See [MR !25](https://gitlab.example.com/example-group/gla/-/merge_requests/25).
 
 ### Added
 
@@ -133,5 +133,5 @@ git ls-remote --tags --refs origin | sed 's#.*/##' | sort -V | tail -1
 # Repository → Tags → sorted by date
 ```
 
-[v2]: https://gitlab.example.com/example-group/HACtions/-/tags/v2
-[v1]: https://gitlab.example.com/example-group/HACtions/-/tags/v1
+[v2]: https://gitlab.example.com/example-group/gla/-/tags/v2
+[v1]: https://gitlab.example.com/example-group/gla/-/tags/v1

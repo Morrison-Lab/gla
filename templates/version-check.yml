@@ -1,4 +1,4 @@
-# HACtions: Version check template
+# gla: Version check template
 # Include this in your .gitlab-ci.yml to ensure DESCRIPTION version is bumped
 # relative to the default branch on every MR.
 #
@@ -6,21 +6,21 @@
 # has a recognized skip label (for documentation-only or CI-only changes).
 #
 # Default skip labels: "no-version-bump", "no version increment"
-# Repos can override by setting HAC_VERSION_SKIP_LABELS in their .gitlab-ci.yml
+# Repos can override by setting GLA_VERSION_SKIP_LABELS in their .gitlab-ci.yml
 # variables block (comma-separated list of label names).
 
-.hac-version-check:
+.gla-version-check:
   stage: version
   variables:
-    HAC_DEP_MANAGER: "pak"
+    GLA_DEP_MANAGER: "pak"
     # Comma-separated list of MR labels that skip the version check.
     # Override in your repo's .gitlab-ci.yml to add custom labels.
-    HAC_VERSION_SKIP_LABELS: "no-version-bump,no version increment"
-    # HAC_R_LIBS_USER is used in cache paths below. R_LIBS_USER is the variable
+    GLA_VERSION_SKIP_LABELS: "no-version-bump,no version increment"
+    # GLA_R_LIBS_USER is used in cache paths below. R_LIBS_USER is the variable
     # R actually reads. Both MUST stay identical — if one changes, update the other.
-    HAC_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+    GLA_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
     # R_LIBS_USER ensures R subprocesses find packages in the cached location.
-    # Set directly (not via HAC_R_LIBS_USER) — GitLab intra-block expansion is unreliable.
+    # Set directly (not via GLA_R_LIBS_USER) — GitLab intra-block expansion is unreliable.
     R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
   # NOTE: Required tools: jq (for API JSON parsing), git (for fetch/show),
   # curl (for API calls). These are present in rocker/verse but may be missing
@@ -33,9 +33,9 @@
       when: never
     # Static rules check for the two built-in labels (covers MR pipelines).
     # The script-level check below handles the full configurable list for
-    # branch pipelines and any additional labels repos add via HAC_VERSION_SKIP_LABELS.
+    # branch pipelines and any additional labels repos add via GLA_VERSION_SKIP_LABELS.
     # These two static rules always apply, even if a repo overrides
-    # HAC_VERSION_SKIP_LABELS to a set that excludes them: GitLab's static
+    # GLA_VERSION_SKIP_LABELS to a set that excludes them: GitLab's static
     # rules can't read a variable's value dynamically, so a repo that intends
     # to *replace* the defaults will still see the job skipped by either label.
     - if: $CI_MERGE_REQUEST_LABELS =~ /no-version-bump/
@@ -57,7 +57,7 @@
         echo "jq installed successfully."
       fi
     # Check for skip labels on associated MR (works for branch pipelines too).
-    # Uses the configurable HAC_VERSION_SKIP_LABELS variable (comma-separated).
+    # Uses the configurable GLA_VERSION_SKIP_LABELS variable (comma-separated).
     - |
       if [[ -n "${GITLAB_TOKEN:-}" ]]; then
         AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
@@ -81,11 +81,11 @@
         else
           LABELS=$(echo "$MR_JSON" | jq -r '.labels[]' 2>/dev/null || true)
         fi
-        IFS=',' read -ra SKIP_LABELS <<< "$HAC_VERSION_SKIP_LABELS"
+        IFS=',' read -ra SKIP_LABELS <<< "$GLA_VERSION_SKIP_LABELS"
         for skip_label in "${SKIP_LABELS[@]}"; do
           # Trim leading/trailing whitespace from the configured label
           skip_label=$(echo "$skip_label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-          # A trailing comma in HAC_VERSION_SKIP_LABELS yields an empty element here;
+          # A trailing comma in GLA_VERSION_SKIP_LABELS yields an empty element here;
           # grep -qxF "" would match any line in $LABELS and skip the check for every MR.
           [ -z "$skip_label" ] && continue
           if echo "$LABELS" | grep -qxF "$skip_label"; then
@@ -120,7 +120,7 @@
         - cache-$CI_DEFAULT_BRANCH
         - cache-default
       paths:
-        - ${HAC_R_LIBS_USER}
+        - ${GLA_R_LIBS_USER}
 
 version-check:
-  extends: .hac-version-check
+  extends: .gla-version-check

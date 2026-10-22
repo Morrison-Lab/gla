@@ -157,16 +157,16 @@ This diff is INCOMPLETE. Changes beyond this point were not provided to you.]"
 
 # --- per-file cap derivation -------------------------------------------------
 
-# derive_caps [HAC_MAX_KEY_FILES_BYTES] [HAC_MAX_SINGLE_FILE_PCT] [HAC_MAX_SINGLE_FILE_BYTES]
+# derive_caps [GLA_MAX_KEY_FILES_BYTES] [GLA_MAX_SINGLE_FILE_PCT] [GLA_MAX_SINGLE_FILE_BYTES]
 # Prints "<total> <per-file>". Mirrors the production derivation.
 derive_caps() {
-  local HAC_MAX_KEY_FILES_BYTES="${1:-}"
-  local HAC_MAX_SINGLE_FILE_PCT="${2:-}"
-  local HAC_MAX_SINGLE_FILE_BYTES="${3:-}"
+  local GLA_MAX_KEY_FILES_BYTES="${1:-}"
+  local GLA_MAX_SINGLE_FILE_PCT="${2:-}"
+  local GLA_MAX_SINGLE_FILE_BYTES="${3:-}"
   local MAX_KEY_FILES_BYTES SINGLE_FILE_PCT MAX_SINGLE_FILE_BYTES
-  MAX_KEY_FILES_BYTES=${HAC_MAX_KEY_FILES_BYTES:-250000}
-  SINGLE_FILE_PCT=${HAC_MAX_SINGLE_FILE_PCT:-60}
-  MAX_SINGLE_FILE_BYTES=${HAC_MAX_SINGLE_FILE_BYTES:-$((MAX_KEY_FILES_BYTES * SINGLE_FILE_PCT / 100))}
+  MAX_KEY_FILES_BYTES=${GLA_MAX_KEY_FILES_BYTES:-250000}
+  SINGLE_FILE_PCT=${GLA_MAX_SINGLE_FILE_PCT:-60}
+  MAX_SINGLE_FILE_BYTES=${GLA_MAX_SINGLE_FILE_BYTES:-$((MAX_KEY_FILES_BYTES * SINGLE_FILE_PCT / 100))}
   echo "$MAX_KEY_FILES_BYTES $MAX_SINGLE_FILE_BYTES"
 }
 
@@ -191,30 +191,30 @@ derive_caps() {
 }
 
 @test "budget settings accept non-negative decimal integers" {
-  run validate_nonnegative_integer HAC_MAX_KEY_FILES_BYTES 0
+  run validate_nonnegative_integer GLA_MAX_KEY_FILES_BYTES 0
   [ "$status" -eq 0 ]
 
-  run validate_nonnegative_integer HAC_MAX_KEY_FILES_BYTES 1000000000
+  run validate_nonnegative_integer GLA_MAX_KEY_FILES_BYTES 1000000000
   [ "$status" -eq 0 ]
 
-  run validate_nonnegative_integer HAC_MAX_SINGLE_FILE_PCT 100 100
+  run validate_nonnegative_integer GLA_MAX_SINGLE_FILE_PCT 100 100
   [ "$status" -eq 0 ]
 }
 
 @test "budget settings reject malformed, negative, and out-of-range values" {
-  run validate_nonnegative_integer HAC_MAX_KEY_FILES_BYTES -1
+  run validate_nonnegative_integer GLA_MAX_KEY_FILES_BYTES -1
   [ "$status" -ne 0 ]
 
-  run validate_nonnegative_integer HAC_MAX_KEY_FILES_BYTES 08
+  run validate_nonnegative_integer GLA_MAX_KEY_FILES_BYTES 08
   [ "$status" -ne 0 ]
 
-  run validate_nonnegative_integer HAC_MAX_KEY_FILES_BYTES 1000000001
+  run validate_nonnegative_integer GLA_MAX_KEY_FILES_BYTES 1000000001
   [ "$status" -ne 0 ]
 
-  run validate_nonnegative_integer HAC_MAX_KEY_FILES_BYTES 999999999999999999999999999999
+  run validate_nonnegative_integer GLA_MAX_KEY_FILES_BYTES 999999999999999999999999999999
   [ "$status" -ne 0 ]
 
-  run validate_nonnegative_integer HAC_MAX_SINGLE_FILE_PCT 101 100
+  run validate_nonnegative_integer GLA_MAX_SINGLE_FILE_PCT 101 100
   [ "$status" -ne 0 ]
 }
 
@@ -557,8 +557,8 @@ source "$BATS_TEST_DIRNAME/../../scripts/lib/format-review-comment.sh"
   [[ "$output" == *"> ⚠️ **Partial context:** Full-file contents were omitted or partially truncated for some modified files"* ]]
 }
 
-@test "claude-review.sh defaults HAC_MAX_DIFF_BYTES to 250000" {
-  run grep -F 'MAX_DIFF_BYTES=${HAC_MAX_DIFF_BYTES:-250000}' scripts/claude-review.sh
+@test "claude-review.sh defaults GLA_MAX_DIFF_BYTES to 250000" {
+  run grep -F 'MAX_DIFF_BYTES=${GLA_MAX_DIFF_BYTES:-250000}' scripts/claude-review.sh
   [ "$status" -eq 0 ]
 }
 

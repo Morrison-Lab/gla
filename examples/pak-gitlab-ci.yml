@@ -4,7 +4,7 @@
 # Copy this file to your repo as .gitlab-ci.yml and customize as needed.
 
 include:
-  - project: 'example-group/HACtions'
+  - project: 'example-group/gla'
     ref: main
     file:
       - '/templates/workflow.yml'
@@ -26,9 +26,9 @@ image: rocker/verse:latest
 variables:
   GIT_DEPTH: 10
   # Dependency manager: "pak" (default) or "renv"
-  HAC_DEP_MANAGER: "pak"
+  GLA_DEP_MANAGER: "pak"
   # Library path for installed packages
-  HAC_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
+  GLA_R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
   R_LIBS: "${CI_PROJECT_DIR}/ci/lib:${R_LIBS}"
   R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
   # Lint settings
@@ -36,14 +36,14 @@ variables:
   # pkgdown settings
   SITE_BY_BRANCH: "TRUE"
   # Set to "true" if you have .qmd vignettes
-  HAC_PKGDOWN_INSTALL_QUARTO: "false"
+  GLA_PKGDOWN_INSTALL_QUARTO: "false"
   # Security
   SECRET_DETECTION_ENABLED: 'true'
 
 cache:
   - key: cache-default
     paths:
-      - ${HAC_R_LIBS_USER}
+      - ${GLA_R_LIBS_USER}
 
 stages:
   - build

@@ -1,10 +1,10 @@
-# HACtions
+# gla
 
 Reusable GitLab CI/CD templates for R packages in the lab.
 
 ## Overview
 
-HACtions provides shared CI/CD pipeline templates that can be included in any
+gla provides shared CI/CD pipeline templates that can be included in any
 R package repo via GitLab's
 [`include:`](https://docs.gitlab.com/ee/ci/yaml/includes.html) mechanism.
 This eliminates copy-paste of CI jobs across repos and provides a single place
@@ -12,7 +12,7 @@ to update pipeline logic.
 
 ## Versioning
 
-HACtions uses **major version tags** (`v1`, `v2`, …) for breaking changes.
+gla uses **major version tags** (`v1`, `v2`, …) for breaking changes.
 Non-breaking improvements land on `main` continuously.
 
 | `ref:` value | Behavior |
@@ -25,7 +25,7 @@ Non-breaking improvements land on `main` continuously.
 
 To find the latest tag:
 - **GitLab UI:** Repository → Tags (sorted by date)
-- **CLI:** `git ls-remote --tags --refs https://gitlab.example.com/example-group/HACtions.git | sed 's#.*/##' | sort -V | tail -1`
+- **CLI:** `git ls-remote --tags --refs https://gitlab.example.com/example-group/gla.git | sed 's#.*/##' | sort -V | tail -1`
 
 ## Quick Start
 
@@ -33,7 +33,7 @@ In your repo's `.gitlab-ci.yml`:
 
 ```yaml
 include:
-  - project: 'example-group/HACtions'
+  - project: 'example-group/gla'
     ref: v2  # or 'main' for always-latest
     file:
       # ── Required ──────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ image: rocker/verse:latest
 
 variables:
   # Choose dependency manager: "pak" (default) or "renv"
-  HAC_DEP_MANAGER: "pak"
+  GLA_DEP_MANAGER: "pak"
 
 stages:
   - build
@@ -137,41 +137,41 @@ behavior:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HAC_DEP_MANAGER` | `"pak"` | Dependency manager: `"pak"` or `"renv"` |
-| `HAC_R_LIBS_USER` | `${CI_PROJECT_DIR}/ci/lib` | Library path for installed packages |
-| `HAC_CHECK_ARGS` | `"--no-manual"` | Extra args for `R CMD check` |
-| `HAC_CHECK_ERROR_ON` | `"warning"` | rcmdcheck error level |
-| `HAC_COVERAGE_ALLOW_FAILURE` | `"true"` | Whether coverage job can fail |
-| `HAC_PKGDOWN_INSTALL_QUARTO` | `"false"` | Install quarto for .qmd vignettes |
+| `GLA_DEP_MANAGER` | `"pak"` | Dependency manager: `"pak"` or `"renv"` |
+| `GLA_R_LIBS_USER` | `${CI_PROJECT_DIR}/ci/lib` | Library path for installed packages |
+| `GLA_CHECK_ARGS` | `"--no-manual"` | Extra args for `R CMD check` |
+| `GLA_CHECK_ERROR_ON` | `"warning"` | rcmdcheck error level |
+| `GLA_COVERAGE_ALLOW_FAILURE` | `"true"` | Whether coverage job can fail |
+| `GLA_PKGDOWN_INSTALL_QUARTO` | `"false"` | Install quarto for .qmd vignettes |
 | `LINTR_ERROR_ON_LINT` | `"true"` | Fail pipeline on lint findings |
 | `NLB_GLOBS` | `"*.md"` | Space-separated pathspecs for semantic line break check |
 | `NLB_PATHS_IGNORE` | `""` | Comma/newline-separated glob patterns to skip in line break check |
 | `NLB_FAIL` | `"true"` | Fail pipeline on semantic line break violations |
 | `NLB_CLAUSE_BREAKS` | `"true"` | Flag long lines with mid-line semicolons (SemBr rule 5) |
 | `NLB_CLAUSE_MIN_LENGTH` | `"80"` | Minimum visible length before clause check applies |
-| `HAC_NLB_REF` | pinned commit SHA | Commit SHA to fetch `check-new-line-breaks.py` at |
-| `HAC_NLB_SHA256` | digest of pinned file | Expected SHA256 checksum of `check-new-line-breaks.py` |
+| `GLA_NLB_REF` | pinned commit SHA | Commit SHA to fetch `check-new-line-breaks.py` at |
+| `GLA_NLB_SHA256` | digest of pinned file | Expected SHA256 checksum of `check-new-line-breaks.py` |
 | `SITE_BY_BRANCH` | `"TRUE"` | Deploy per-branch pkgdown sites |
-| `HAC_HACTIONS_PROJECT_ID` | (set in the template) | Project ID of HACtions repo (for script fetching) |
-| `HAC_HACTIONS_REF` | `"main"` | Branch/tag of HACtions to fetch scripts from |
+| `GLA_PROJECT_ID` | (set in the template) | Project ID of gla repo (for script fetching) |
+| `GLA_REF` | `"main"` | Branch/tag of gla to fetch scripts from |
 | `REVIEW_MODEL` | `"databricks-gpt-5-6-sol"` | Databricks endpoint used for automatic review |
-| `HAC_CLAUDE_COMPANION_REVIEW` | `"false"` | Run an additional Claude Sonnet review |
-| `HAC_REVIEW_PROMPT_ADDENDUM` | `""` | Optional repository-specific review guidance appended to the agent contract |
-| `HAC_REVIEW_AGENT` | `"true"` | Enable bounded read-only repository exploration; set `"false"` for prompt-only mode |
-| `HAC_MAX_REVIEW_TOOL_ROUNDS` | `8` | Maximum read-only exploration rounds per review |
-| `HAC_MAX_REVIEW_TOOL_CALLS` | `16` | Maximum read-only tool calls in one model response |
-| `HAC_MAX_REVIEW_TOOL_RESULT_CHARS` | `120000` | Total tool-result characters retained across a review |
-| `HAC_MAX_REVIEW_RESPONSE_CHARS` | `200000` | Maximum endpoint response characters retained per request |
-| `HAC_REVIEW_DEADLINE_SECONDS` | `480` | Overall automatic-review deadline, below the 10-minute job timeout |
-| `HAC_MAX_REVIEW_NOTES_CHARS` | `500000` | Cumulative MR-note response budget while fetching history |
-| `HAC_MAX_REVIEW_HISTORY_CHARS` | `12000` | Maximum historical review context passed to the reviewer |
-| `HAC_AGENT_REVIEW_ENABLED` | `"false"` | Enable the experimental Claude Code agent-review job |
-| `HAC_AGENT_REVIEW_MODEL` | _(required)_ | Model identifier exposed by the agent gateway |
-| `HAC_AGENT_REVIEW_BASE_URL` | _(required)_ | Anthropic-compatible gateway base URL; do not assume the direct Databricks invocation URL works |
-| `HAC_AGENT_REVIEW_AUTH_TOKEN` | _(required)_ | Protected token accepted by the agent gateway |
-| `HAC_AGENT_REVIEW_MAX_TURNS` | `"12"` | Maximum Claude Code tool-use turns per review |
-| `HAC_AGENT_REVIEW_MAX_DIFF_BYTES` | `"250000"` | Positive canonical decimal maximum MR-diff bytes (up to 1,000,000,000); truncation is disclosed in the prompt |
-| `HAC_AGENT_REVIEW_MAX_OUTPUT_CHARS` | `"50000"` | Positive canonical decimal maximum characters posted in the agent review note (up to 1,000,000,000) |
+| `GLA_CLAUDE_COMPANION_REVIEW` | `"false"` | Run an additional Claude Sonnet review |
+| `GLA_REVIEW_PROMPT_ADDENDUM` | `""` | Optional repository-specific review guidance appended to the agent contract |
+| `GLA_REVIEW_AGENT` | `"true"` | Enable bounded read-only repository exploration; set `"false"` for prompt-only mode |
+| `GLA_MAX_REVIEW_TOOL_ROUNDS` | `8` | Maximum read-only exploration rounds per review |
+| `GLA_MAX_REVIEW_TOOL_CALLS` | `16` | Maximum read-only tool calls in one model response |
+| `GLA_MAX_REVIEW_TOOL_RESULT_CHARS` | `120000` | Total tool-result characters retained across a review |
+| `GLA_MAX_REVIEW_RESPONSE_CHARS` | `200000` | Maximum endpoint response characters retained per request |
+| `GLA_REVIEW_DEADLINE_SECONDS` | `480` | Overall automatic-review deadline, below the 10-minute job timeout |
+| `GLA_MAX_REVIEW_NOTES_CHARS` | `500000` | Cumulative MR-note response budget while fetching history |
+| `GLA_MAX_REVIEW_HISTORY_CHARS` | `12000` | Maximum historical review context passed to the reviewer |
+| `GLA_AGENT_REVIEW_ENABLED` | `"false"` | Enable the experimental Claude Code agent-review job |
+| `GLA_AGENT_REVIEW_MODEL` | _(required)_ | Model identifier exposed by the agent gateway |
+| `GLA_AGENT_REVIEW_BASE_URL` | _(required)_ | Anthropic-compatible gateway base URL; do not assume the direct Databricks invocation URL works |
+| `GLA_AGENT_REVIEW_AUTH_TOKEN` | _(required)_ | Protected token accepted by the agent gateway |
+| `GLA_AGENT_REVIEW_MAX_TURNS` | `"12"` | Maximum Claude Code tool-use turns per review |
+| `GLA_AGENT_REVIEW_MAX_DIFF_BYTES` | `"250000"` | Positive canonical decimal maximum MR-diff bytes (up to 1,000,000,000); truncation is disclosed in the prompt |
+| `GLA_AGENT_REVIEW_MAX_OUTPUT_CHARS` | `"50000"` | Positive canonical decimal maximum characters posted in the agent review note (up to 1,000,000,000) |
 
 The agent-review job runs only on a protected source branch with an open merge
 request.
@@ -188,14 +188,14 @@ installs `curl` and `git` with `apt-get`).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HAC_PHI_IMAGE` | `"python:3.13-slim"` | Image providing `python3`. Debian/Ubuntu-based unless you override `before_script` |
-| `HAC_GHA_REPO` | `"Morrison-Lab/gha"` | Repo hosting `check-phi.py` |
-| `HAC_GHA_REF` | pinned commit SHA | Commit to fetch at. Pin to a SHA, never a branch: the fetched script is executed |
-| `HAC_PHI_SHA256` | digest of the pinned file | Verified before execution. Update in the same change as `HAC_GHA_REF` |
-| `HAC_PHI_DETECTORS` | `""` (all defaults) | Comma-separated subset. Defaults: `ssn`, `mrn`, `dob`, `csv_phi_header`, `study_id`; also `phone`, `email` |
-| `HAC_PHI_PATHS_IGNORE` | `""` | Comma/newline-separated globs to skip; supports `**` |
-| `HAC_PHI_ALLOWLIST_FILE` | `""` | Regex allowlist. When unset, `.gitlab/phi-allowlist.txt` then `.github/phi-allowlist.txt` are used if present |
-| `HAC_PHI_FAIL` | `"true"` | `"false"` warns instead of failing the job |
+| `GLA_PHI_IMAGE` | `"python:3.13-slim"` | Image providing `python3`. Debian/Ubuntu-based unless you override `before_script` |
+| `GLA_GHA_REPO` | `"Morrison-Lab/gha"` | Repo hosting `check-phi.py` |
+| `GLA_GHA_REF` | pinned commit SHA | Commit to fetch at. Pin to a SHA, never a branch: the fetched script is executed |
+| `GLA_PHI_SHA256` | digest of the pinned file | Verified before execution. Update in the same change as `GLA_GHA_REF` |
+| `GLA_PHI_DETECTORS` | `""` (all defaults) | Comma-separated subset. Defaults: `ssn`, `mrn`, `dob`, `csv_phi_header`, `study_id`; also `phone`, `email` |
+| `GLA_PHI_PATHS_IGNORE` | `""` | Comma/newline-separated globs to skip; supports `**` |
+| `GLA_PHI_ALLOWLIST_FILE` | `""` | Regex allowlist. When unset, `.gitlab/phi-allowlist.txt` then `.github/phi-allowlist.txt` are used if present |
+| `GLA_PHI_FAIL` | `"true"` | `"false"` warns instead of failing the job |
 
 The `check-phi` job sets `GIT_DEPTH: 0` at job level, which overrides a global
 `GIT_DEPTH` (the shipped examples set `10`). That is deliberate and not
@@ -210,21 +210,21 @@ reviews are missing context; lower them to cut token spend.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HAC_MAX_DIFF_BYTES` | `250000` | MR diff cap. Over this, the diff is truncated and the prompt says so |
-| `HAC_MAX_KEY_FILES_BYTES` | `250000` | Total cap on inlined contents of changed files |
-| `HAC_MAX_SINGLE_FILE_PCT` | `60` | Per-file cap, as a percentage of the total |
-| `HAC_MAX_SINGLE_FILE_BYTES` | *derived* | Explicit per-file cap; overrides the percentage |
-| `HAC_MAX_COMMIT_LINES` | `100` | Commit-message lines included |
-| `HAC_MAX_MR_DESCRIPTION_CHARS` | `2000` | MR description characters |
-| `HAC_MAX_PRIOR_REVIEW_CHARS` | `3000` | Previous auto-review characters fed back in |
-| `HAC_MAX_AUTHOR_RESPONSE_CHARS` | `2000` | Author's reply-to-review characters |
+| `GLA_MAX_DIFF_BYTES` | `250000` | MR diff cap. Over this, the diff is truncated and the prompt says so |
+| `GLA_MAX_KEY_FILES_BYTES` | `250000` | Total cap on inlined contents of changed files |
+| `GLA_MAX_SINGLE_FILE_PCT` | `60` | Per-file cap, as a percentage of the total |
+| `GLA_MAX_SINGLE_FILE_BYTES` | *derived* | Explicit per-file cap; overrides the percentage |
+| `GLA_MAX_COMMIT_LINES` | `100` | Commit-message lines included |
+| `GLA_MAX_MR_DESCRIPTION_CHARS` | `2000` | MR description characters |
+| `GLA_MAX_PRIOR_REVIEW_CHARS` | `3000` | Previous auto-review characters fed back in |
+| `GLA_MAX_AUTHOR_RESPONSE_CHARS` | `2000` | Author's reply-to-review characters |
 | `MAX_LAB_MANUAL_BYTES` | `40000` | Lab manual pages fetched for convention citations |
-| `HAC_MAX_LAB_MANUAL_BYTES` | `40000` | Lab manual pages fetched for convention citations; takes precedence over the legacy name |
-| `HAC_LAB_MANUAL_BASE_URL` | SERG manual | Base URL for fetched manual pages |
-| `HAC_LAB_MANUAL_DEFAULT_PAGES` | `coding-style.html coding-practices.html` | Space-separated default page list |
-| `HAC_LAB_MANUAL_ALWAYS_PAGES` | `coding-practices.html` for SERG | Space-separated pages included in every diff-aware selection |
-| `HAC_LAB_MANUAL_PAGE_MAP` | SERG page map | Space-separated `glob|page` rules for diff-aware selection |
-| `HAC_LAB_MANUAL_NAME` | `SERG Lab Manual` | Attribution heading for fetched manual context |
+| `GLA_MAX_LAB_MANUAL_BYTES` | `40000` | Lab manual pages fetched for convention citations; takes precedence over the legacy name |
+| `GLA_LAB_MANUAL_BASE_URL` | SERG manual | Base URL for fetched manual pages |
+| `GLA_LAB_MANUAL_DEFAULT_PAGES` | `coding-style.html coding-practices.html` | Space-separated default page list |
+| `GLA_LAB_MANUAL_ALWAYS_PAGES` | `coding-practices.html` for SERG | Space-separated pages included in every diff-aware selection |
+| `GLA_LAB_MANUAL_PAGE_MAP` | SERG page map | Space-separated `glob|page` rules for diff-aware selection |
+| `GLA_LAB_MANUAL_NAME` | `SERG Lab Manual` | Attribution heading for fetched manual context |
 
 Two things worth knowing:
 
@@ -238,12 +238,12 @@ This preserves the bounded prompt while giving the files most relevant to
 correctness the best chance of being complete.
 Any remaining partial or omitted files are still disclosed to the reviewer.
 The default 50% first-pass reserve can be adjusted with
-`HAC_CONTEXT_PRIORITY_RESERVE_PCT`, or set to 0 to retain the legacy allocation.
+`GLA_CONTEXT_PRIORITY_RESERVE_PCT`, or set to 0 to retain the legacy allocation.
 
 **The per-file cap is a share of the total, not a fixed size.** It exists so one
 large file cannot consume the whole budget and starve the other changed files,
-which is a claim about proportion — so raising `HAC_MAX_KEY_FILES_BYTES` moves
-the per-file cap with it. Set `HAC_MAX_SINGLE_FILE_BYTES` only if you need a
+which is a claim about proportion — so raising `GLA_MAX_KEY_FILES_BYTES` moves
+the per-file cap with it. Set `GLA_MAX_SINGLE_FILE_BYTES` only if you need a
 fixed ceiling regardless of the total.
 
 Sizing headroom: at the defaults, the worst-case prompt is roughly 512,000 bytes
@@ -260,7 +260,7 @@ installation. No extra setup needed.
 
 ### renv-based repos
 
-Set `HAC_DEP_MANAGER: "renv"` and ensure your repo has:
+Set `GLA_DEP_MANAGER: "renv"` and ensure your repo has:
 - `renv.lock` (committed)
 - `renv/activate.R` (committed)
 
@@ -275,9 +275,9 @@ The `scripts/` directory contains shared scripts used by the templates:
 - **`claude-review.sh`** — automated MR code review (reviews full MR diff)
 - **`claude-respond.sh`** — responds to @claude mentions in MR/issue comments
 
-All scripts are fetched at runtime via `curl` from the HACtions repo
+All scripts are fetched at runtime via `curl` from the gla repo
 (using `$CI_JOB_TOKEN` for authentication). If a local copy exists in your
-repo at `.gitlab/scripts/`, it takes precedence over the HACtions version.
+repo at `.gitlab/scripts/`, it takes precedence over the gla version.
 
 ### Claude AI Setup
 
@@ -314,7 +314,7 @@ Automatic reviews use **GPT-5.6 Sol** by default. Set `REVIEW_MODEL` in GitLab
 CI/CD variables to use one different Databricks endpoint instead. For example,
 `databricks-claude-sonnet-4-6` gives you Claude-only automatic review.
 
-Set `HAC_CLAUDE_COMPANION_REVIEW=true` to run Claude Sonnet 4.6 in addition to
+Set `GLA_CLAUDE_COMPANION_REVIEW=true` to run Claude Sonnet 4.6 in addition to
 the primary reviewer. Each pass labels findings with its reviewer identity and
 endpoint, so the findings stay independent even if both passes use the same
 model. The two jobs share a resource group, so they run serially rather than
@@ -327,17 +327,17 @@ The agent can inspect any tracked repository file, read the fetched MR discussio
 and prior review history, and fetch only the UC Davis SERG Lab Manual or GitLab
 documentation URLs on the built-in allowlist.
 It cannot edit files, post comments, push, resolve threads, or merge.
-Set `HAC_REVIEW_AGENT=false` to use the prompt-only reviewer.
+Set `GLA_REVIEW_AGENT=false` to use the prompt-only reviewer.
 If the selected endpoint rejects function tools, the job retries prompt-only.
-`HAC_MAX_REVIEW_TOOL_ROUNDS` limits exploration (8 by default), and
-`HAC_MAX_REVIEW_TOOL_CALLS` limits tool calls in each model response (16 by
+`GLA_MAX_REVIEW_TOOL_ROUNDS` limits exploration (8 by default), and
+`GLA_MAX_REVIEW_TOOL_CALLS` limits tool calls in each model response (16 by
 default).
 Calls beyond either bound receive a bounded error result and cannot execute
 repository or network reads.
-`HAC_MAX_REVIEW_TOOL_RESULT_CHARS` bounds accumulated tool output across the
-review, and `HAC_REVIEW_DEADLINE_SECONDS` leaves cleanup time inside the job's
+`GLA_MAX_REVIEW_TOOL_RESULT_CHARS` bounds accumulated tool output across the
+review, and `GLA_REVIEW_DEADLINE_SECONDS` leaves cleanup time inside the job's
 10-minute timeout.
-`HAC_MAX_REVIEW_HISTORY_CHARS` limits historical review context (12,000 by
+`GLA_MAX_REVIEW_HISTORY_CHARS` limits historical review context (12,000 by
 default).
 
 `CLAUDE_MODEL` remains a compatibility fallback for automatic review, but new
@@ -386,20 +386,20 @@ See `examples/` for complete `.gitlab-ci.yml` files:
 
 To migrate an existing repo:
 
-1. Remove `inst/ci/` scripts from your repo (they now live in HACtions)
+1. Remove `inst/ci/` scripts from your repo (they now live in gla)
 2. Replace your `.gitlab-ci.yml` with the appropriate example
 3. Customize variables as needed
-4. Commit and push — the pipeline will pull templates from HACtions
+4. Commit and push — the pipeline will pull templates from gla
 
 ## Reverse Dependencies
 
-See **[REVDEPS.md](REVDEPS.md)** for a list of repos that consume HACtions
+See **[REVDEPS.md](REVDEPS.md)** for a list of repos that consume gla
 templates. This list helps us notify consumers quickly when we make breaking
 changes — but it's advisory, not authoritative. Always verify with a
 group-wide search when releasing a breaking change.
 
-**If your repo uses HACtions**, please open an MR adding it to `REVDEPS.md`
-(or file an issue). If you stop using HACtions, open an MR or issue to be
+**If your repo uses gla**, please open an MR adding it to `REVDEPS.md`
+(or file an issue). If you stop using gla, open an MR or issue to be
 removed.
 
 ## Contributing

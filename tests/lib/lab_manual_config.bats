@@ -19,11 +19,11 @@ setup() {
 }
 
 @test "consumers can override the base URL, defaults, and page map" {
-  export HAC_LAB_MANUAL_BASE_URL=https://example.test/manual
-  export HAC_LAB_MANUAL_DEFAULT_PAGES="overview.html style.html"
-  export HAC_LAB_MANUAL_ALWAYS_PAGES=
-  export HAC_LAB_MANUAL_PAGE_MAP="*.R|r-style.html *.sh|shell.html"
-  export HAC_LAB_MANUAL_NAME="Example Manual"
+  export GLA_LAB_MANUAL_BASE_URL=https://example.test/manual
+  export GLA_LAB_MANUAL_DEFAULT_PAGES="overview.html style.html"
+  export GLA_LAB_MANUAL_ALWAYS_PAGES=
+  export GLA_LAB_MANUAL_PAGE_MAP="*.R|r-style.html *.sh|shell.html"
+  export GLA_LAB_MANUAL_NAME="Example Manual"
   source "$SCRIPT"
   [ "$LAB_MANUAL_BASE_URL" = "https://example.test/manual" ]
   [ "$LAB_MANUAL_DEFAULT_PAGES" = "overview.html style.html" ]
@@ -36,9 +36,9 @@ setup() {
 }
 
 @test "always-pages override accepts multiple page names" {
-  export HAC_LAB_MANUAL_BASE_URL=https://example.test/manual
-  export HAC_LAB_MANUAL_ALWAYS_PAGES="overview.html practices.html"
-  export HAC_LAB_MANUAL_PAGE_MAP=
+  export GLA_LAB_MANUAL_BASE_URL=https://example.test/manual
+  export GLA_LAB_MANUAL_ALWAYS_PAGES="overview.html practices.html"
+  export GLA_LAB_MANUAL_PAGE_MAP=
   source "$SCRIPT"
 
   run _select_pages_for_diff "README.md"

@@ -1,18 +1,18 @@
-# HACtions: experimental Claude Code agent review
+# gla: experimental Claude Code agent review
 #
 # Include this file alongside templates/claude.yml to add an opt-in agentic
-# reviewer. The existing .hac-claude-review job remains the default reviewer;
+# reviewer. The existing .gla-claude-review job remains the default reviewer;
 # this job does not replace it.
 #
 # Required protected CI/CD variables (set only after validating the gateway in
 # a non-PHI project):
-#   HAC_AGENT_REVIEW_AUTH_TOKEN — token accepted by an Anthropic-compatible gateway
-#   HAC_AGENT_REVIEW_BASE_URL   — Anthropic-compatible gateway base URL
+#   GLA_AGENT_REVIEW_AUTH_TOKEN — token accepted by an Anthropic-compatible gateway
+#   GLA_AGENT_REVIEW_BASE_URL   — Anthropic-compatible gateway base URL
 #   GITLAB_TOKEN                — project token with API scope for posting the review
 #
 # Required ordinary CI/CD variables:
-#   HAC_AGENT_REVIEW_ENABLED — set to "true" to enable this experimental job
-#   HAC_AGENT_REVIEW_MODEL   — model identifier exposed by that gateway
+#   GLA_AGENT_REVIEW_ENABLED — set to "true" to enable this experimental job
+#   GLA_AGENT_REVIEW_MODEL   — model identifier exposed by that gateway
 #
 # The job runs only for protected source branches. GitLab does not expose
 # protected variables to ordinary feature-branch pipelines, and this template
@@ -20,30 +20,30 @@
 # Protect the source-branch pattern used for agent-reviewed merge requests.
 #
 # The Databricks serving-endpoint URL used by claude-review.sh is not assumed
-# compatible with Claude Code. Configure HAC_AGENT_REVIEW_BASE_URL separately.
+# compatible with Claude Code. Configure GLA_AGENT_REVIEW_BASE_URL separately.
 # This job stages a tracked-file snapshot of the reviewed commit, confines
 # Read/Glob/Grep to that workspace, and launches the agent under a separate
 # unprivileged UID behind a root-owned loopback gateway proxy so neither GitLab
 # credentials nor the gateway token enter the agent process environment.
 
-.hac-agent-review:
+.gla-agent-review:
   stage: claude
   image: node:22-bookworm-slim
   needs: []
   resource_group: agent-review-$CI_COMMIT_REF_SLUG
   interruptible: true
   rules:
-    - if: $HAC_AGENT_REVIEW_ENABLED == "true" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_COMMIT_REF_PROTECTED == "true"
+    - if: $GLA_AGENT_REVIEW_ENABLED == "true" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_COMMIT_REF_PROTECTED == "true"
   variables:
     GIT_STRATEGY: clone
     GIT_CHECKOUT: "true"
     GIT_DEPTH: 0
-    HAC_AGENT_REVIEW_MAX_TURNS: "12"
-    HAC_AGENT_REVIEW_MAX_DIFF_BYTES: "250000"
-    HAC_AGENT_REVIEW_MAX_OUTPUT_CHARS: "50000"
-    HAC_AGENT_REVIEW_CLAUDE_CODE_VERSION: "2.1.267"
-    HAC_AI_CONFIG_REPO: "Morrison-Lab/ai-config"
-    HAC_AI_CONFIG_REF: "bf6b118a8281657f3fe6d513e976c7e33e3cd26b"
+    GLA_AGENT_REVIEW_MAX_TURNS: "12"
+    GLA_AGENT_REVIEW_MAX_DIFF_BYTES: "250000"
+    GLA_AGENT_REVIEW_MAX_OUTPUT_CHARS: "50000"
+    GLA_AGENT_REVIEW_CLAUDE_CODE_VERSION: "2.1.267"
+    GLA_AI_CONFIG_REPO: "Morrison-Lab/ai-config"
+    GLA_AI_CONFIG_REF: "bf6b118a8281657f3fe6d513e976c7e33e3cd26b"
   before_script:
     - |
       set -eu
@@ -82,44 +82,44 @@
           exit 1
         }
       done
-      for required in HAC_AGENT_REVIEW_AUTH_TOKEN HAC_AGENT_REVIEW_BASE_URL HAC_AGENT_REVIEW_MODEL GITLAB_TOKEN; do
+      for required in GLA_AGENT_REVIEW_AUTH_TOKEN GLA_AGENT_REVIEW_BASE_URL GLA_AGENT_REVIEW_MODEL GITLAB_TOKEN; do
         if [ -z "${!required:-}" ]; then
-          echo "ERROR: $required must be set when HAC_AGENT_REVIEW_ENABLED=true." >&2
+          echo "ERROR: $required must be set when GLA_AGENT_REVIEW_ENABLED=true." >&2
           exit 1
         fi
       done
-      if ! validate_gateway_base_url "$HAC_AGENT_REVIEW_BASE_URL"; then
-        echo "ERROR: HAC_AGENT_REVIEW_BASE_URL must be an https:// URL." >&2
+      if ! validate_gateway_base_url "$GLA_AGENT_REVIEW_BASE_URL"; then
+        echo "ERROR: GLA_AGENT_REVIEW_BASE_URL must be an https:// URL." >&2
         exit 1
       fi
-      case "${HAC_AGENT_REVIEW_MAX_TURNS}" in
-        ''|*[!0-9]*) echo "ERROR: HAC_AGENT_REVIEW_MAX_TURNS must be a non-negative integer." >&2; exit 1 ;;
+      case "${GLA_AGENT_REVIEW_MAX_TURNS}" in
+        ''|*[!0-9]*) echo "ERROR: GLA_AGENT_REVIEW_MAX_TURNS must be a non-negative integer." >&2; exit 1 ;;
       esac
-      for limit_name in HAC_AGENT_REVIEW_MAX_DIFF_BYTES HAC_AGENT_REVIEW_MAX_OUTPUT_CHARS; do
+      for limit_name in GLA_AGENT_REVIEW_MAX_DIFF_BYTES GLA_AGENT_REVIEW_MAX_OUTPUT_CHARS; do
         if ! validate_positive_limit "${!limit_name}"; then
           echo "ERROR: ${limit_name} must be a positive decimal integer without leading zeros, at most 1000000000." >&2
           exit 1
         fi
       done
-      npm install --prefix /tmp/hac-agent-review --ignore-scripts --no-audit --no-fund \
-        "@anthropic-ai/claude-code@${HAC_AGENT_REVIEW_CLAUDE_CODE_VERSION}"
-      CLAUDE_WRAPPER=/tmp/hac-agent-review/node_modules/@anthropic-ai/claude-code/cli-wrapper.cjs
+      npm install --prefix /tmp/gla-agent-review --ignore-scripts --no-audit --no-fund \
+        "@anthropic-ai/claude-code@${GLA_AGENT_REVIEW_CLAUDE_CODE_VERSION}"
+      CLAUDE_WRAPPER=/tmp/gla-agent-review/node_modules/@anthropic-ai/claude-code/cli-wrapper.cjs
       [ -f "$CLAUDE_WRAPPER" ] || {
         echo "ERROR: Claude Code wrapper was not installed at $CLAUDE_WRAPPER." >&2
         exit 1
       }
-      if ! validate_ai_config_ref "$HAC_AI_CONFIG_REF"; then
-        echo "ERROR: HAC_AI_CONFIG_REF must be a 40-character lowercase hexadecimal commit SHA." >&2
+      if ! validate_ai_config_ref "$GLA_AI_CONFIG_REF"; then
+        echo "ERROR: GLA_AI_CONFIG_REF must be a 40-character lowercase hexadecimal commit SHA." >&2
         exit 1
       fi
-      plugin_checkout=/tmp/hac-agent-review/ai-config
+      plugin_checkout=/tmp/gla-agent-review/ai-config
       git init -q "$plugin_checkout"
-      git -C "$plugin_checkout" remote add origin "https://github.com/${HAC_AI_CONFIG_REPO}.git"
-      git -C "$plugin_checkout" fetch -q --depth 1 origin "$HAC_AI_CONFIG_REF"
+      git -C "$plugin_checkout" remote add origin "https://github.com/${GLA_AI_CONFIG_REPO}.git"
+      git -C "$plugin_checkout" fetch -q --depth 1 origin "$GLA_AI_CONFIG_REF"
       git -C "$plugin_checkout" checkout -q --detach FETCH_HEAD
-      [ "$(git -C "$plugin_checkout" rev-parse HEAD)" = "$HAC_AI_CONFIG_REF" ] || { echo "ERROR: ai-config checkout did not match HAC_AI_CONFIG_REF." >&2; exit 1; }
+      [ "$(git -C "$plugin_checkout" rev-parse HEAD)" = "$GLA_AI_CONFIG_REF" ] || { echo "ERROR: ai-config checkout did not match GLA_AI_CONFIG_REF." >&2; exit 1; }
       [ -f "$plugin_checkout/plugins/ai-config/plugin.json" ] || { echo "ERROR: pinned ai-config checkout lacks its plugin manifest." >&2; exit 1; }
-      chmod -R a+rX /tmp/hac-agent-review
+      chmod -R a+rX /tmp/gla-agent-review
   script:
     - |
       set -eu
@@ -338,7 +338,7 @@
         echo "ERROR: agent review requires root outer execution and a non-root agent UID/GID." >&2
         exit 1
       fi
-      CLAUDE_WRAPPER=/tmp/hac-agent-review/node_modules/@anthropic-ai/claude-code/cli-wrapper.cjs
+      CLAUDE_WRAPPER=/tmp/gla-agent-review/node_modules/@anthropic-ai/claude-code/cli-wrapper.cjs
       encoded_branch=$(jq -rn --arg value "$CI_COMMIT_REF_NAME" '$value|@uri')
       merge_requests=$(curl --fail --silent --show-error \
         --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
@@ -373,10 +373,10 @@
       bounded_diff_file=$(mktemp)
       git diff --no-ext-diff "$merge_base" "$reviewed_sha" > "$diff_file"
       diff_bytes=$(wc -c < "$diff_file")
-      if [ "$diff_bytes" -gt "$HAC_AGENT_REVIEW_MAX_DIFF_BYTES" ]; then
-        head -c "$HAC_AGENT_REVIEW_MAX_DIFF_BYTES" < "$diff_file" > "$bounded_diff_file"
-        diff_notice="The diff was truncated at ${HAC_AGENT_REVIEW_MAX_DIFF_BYTES} of ${diff_bytes} bytes. Do not make a clean verdict about omitted content."
-        review_scope_note="⚠️ **Partial review:** the agent received ${HAC_AGENT_REVIEW_MAX_DIFF_BYTES} of ${diff_bytes} diff bytes."
+      if [ "$diff_bytes" -gt "$GLA_AGENT_REVIEW_MAX_DIFF_BYTES" ]; then
+        head -c "$GLA_AGENT_REVIEW_MAX_DIFF_BYTES" < "$diff_file" > "$bounded_diff_file"
+        diff_notice="The diff was truncated at ${GLA_AGENT_REVIEW_MAX_DIFF_BYTES} of ${diff_bytes} bytes. Do not make a clean verdict about omitted content."
+        review_scope_note="⚠️ **Partial review:** the agent received ${GLA_AGENT_REVIEW_MAX_DIFF_BYTES} of ${diff_bytes} diff bytes."
       else
         cp "$diff_file" "$bounded_diff_file"
         diff_notice="The full MR diff is included (${diff_bytes} bytes)."
@@ -392,10 +392,10 @@
       rm -f "$extraheader_file"
       mkdir -p /srv
       chmod 0755 /srv
-      agent_workspace=$(mktemp -d /srv/hac-agent-workspace.XXXXXX)
-      agent_home=$(mktemp -d /srv/hac-agent-home.XXXXXX)
-      proxy_config_file=$(mktemp /tmp/hac-agent-proxy-config.XXXXXX)
-      proxy_port_file=$(mktemp /tmp/hac-agent-proxy-port.XXXXXX)
+      agent_workspace=$(mktemp -d /srv/gla-agent-workspace.XXXXXX)
+      agent_home=$(mktemp -d /srv/gla-agent-home.XXXXXX)
+      proxy_config_file=$(mktemp /tmp/gla-agent-proxy-config.XXXXXX)
+      proxy_port_file=$(mktemp /tmp/gla-agent-proxy-port.XXXXXX)
       prompt_file=$(mktemp)
       output_file=$(mktemp)
       normalized_output_file=$(mktemp)
@@ -415,18 +415,18 @@
       trap cleanup_agent_review EXIT
       stage_review_workspace "$CI_PROJECT_DIR" "$reviewed_sha" "$agent_workspace"
       chmod 0700 "$CI_PROJECT_DIR"
-      hook_script=/tmp/hac-agent-review/validate-tool-request.sh
+      hook_script=/tmp/gla-agent-review/validate-tool-request.sh
       {
         printf '%s\n' '#!/usr/bin/env bash' 'set -eu'
         declare -f path_has_dotdot_segment validate_relative_pattern validate_workspace_path validate_tool_request
         printf '%s\n' \
-          'if ! validate_tool_request "${HAC_AGENT_WORKSPACE:-}"; then' \
+          'if ! validate_tool_request "${GLA_AGENT_WORKSPACE:-}"; then' \
           '  echo "ERROR: tool request outside the isolated repository checkout is forbidden." >&2' \
           '  exit 2' \
           'fi'
       } > "$hook_script"
       chmod 0755 "$hook_script"
-      settings_file=/tmp/hac-agent-review/settings.json
+      settings_file=/tmp/gla-agent-review/settings.json
       jq -n --arg hook "$hook_script" '{
         permissions: {
           defaultMode: "dontAsk",
@@ -455,7 +455,7 @@
       cp "$settings_file" "$agent_home/.claude/settings.json"
       chown -R "${agent_uid}:${agent_gid}" "$agent_home"
       chmod 0700 "$agent_home" "$agent_home/.claude"
-      proxy_script=/tmp/hac-agent-review/gateway-proxy.js
+      proxy_script=/tmp/gla-agent-review/gateway-proxy.js
       cat > "$proxy_script" <<'EOF'
       const fs = require("fs");
       const http = require("http");
@@ -534,8 +534,8 @@
       proxy_nonce=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
       chmod 0600 "$proxy_config_file"
       jq -n \
-        --arg upstreamBaseUrl "$HAC_AGENT_REVIEW_BASE_URL" \
-        --arg upstreamAuthToken "$HAC_AGENT_REVIEW_AUTH_TOKEN" \
+        --arg upstreamBaseUrl "$GLA_AGENT_REVIEW_BASE_URL" \
+        --arg upstreamAuthToken "$GLA_AGENT_REVIEW_AUTH_TOKEN" \
         --arg proxyNonce "$proxy_nonce" \
         '{upstreamBaseUrl: $upstreamBaseUrl, upstreamAuthToken: $upstreamAuthToken, proxyNonce: $proxyNonce}' \
         > "$proxy_config_file"
@@ -587,14 +587,14 @@
           setpriv --reuid="$agent_uid" --regid="$agent_gid" --clear-groups --no-new-privs \
           node "$CLAUDE_WRAPPER" --version
         env -i PATH="$PATH" HOME="$agent_home" LANG="${LANG:-C.UTF-8}" \
-          HAC_AGENT_WORKSPACE="$agent_workspace" \
+          GLA_AGENT_WORKSPACE="$agent_workspace" \
           ANTHROPIC_AUTH_TOKEN="$proxy_nonce" \
           ANTHROPIC_BASE_URL="http://127.0.0.1:${proxy_port}" \
           setpriv --reuid="$agent_uid" --regid="$agent_gid" --clear-groups --no-new-privs \
-          node "$CLAUDE_WRAPPER" --print --output-format text --model "$HAC_AGENT_REVIEW_MODEL" \
-          --max-turns "$HAC_AGENT_REVIEW_MAX_TURNS" \
+          node "$CLAUDE_WRAPPER" --print --output-format text --model "$GLA_AGENT_REVIEW_MODEL" \
+          --max-turns "$GLA_AGENT_REVIEW_MAX_TURNS" \
           --restricted --strict-mcp-config --settings "$settings_file" \
-          --plugin-dir /tmp/hac-agent-review/ai-config/plugins/ai-config \
+          --plugin-dir /tmp/gla-agent-review/ai-config/plugins/ai-config \
           --permission-mode default \
           --allowedTools 'Read(./**)' 'Glob' 'Grep' \
           --disallowedTools 'Bash' 'Write' 'Edit' 'NotebookEdit' 'WebFetch' 'WebSearch' \
@@ -606,13 +606,13 @@
       proxy_pid=""
       tr -d '\000' < "$output_file" > "$normalized_output_file"
       review_char_count=$(jq -R -s -r 'length' < "$normalized_output_file")
-      jq -R -s -j --argjson limit "$HAC_AGENT_REVIEW_MAX_OUTPUT_CHARS" \
+      jq -R -s -j --argjson limit "$GLA_AGENT_REVIEW_MAX_OUTPUT_CHARS" \
         '.[0:$limit]' < "$normalized_output_file" > "$bounded_output_file"
       if [ ! -s "$bounded_output_file" ]; then
         echo "ERROR: the agent reviewer returned no review text." >&2
         exit 1
       fi
-      if review_contains_secret "$bounded_output_file" "$HAC_AGENT_REVIEW_AUTH_TOKEN" "$GITLAB_TOKEN" "$proxy_nonce"; then
+      if review_contains_secret "$bounded_output_file" "$GLA_AGENT_REVIEW_AUTH_TOKEN" "$GITLAB_TOKEN" "$proxy_nonce"; then
         echo "ERROR: the agent review output contained credential material; refusing to post." >&2
         exit 1
       fi
@@ -644,12 +644,12 @@
       fi
       {
         printf '%s\n\n%s\n\n' \
-          "🔍 **Experimental agent review by Claude Code (${HAC_AGENT_REVIEW_MODEL}) of MR !${merge_request_iid}** (latest: ${reviewed_sha:0:8})" \
+          "🔍 **Experimental agent review by Claude Code (${GLA_AGENT_REVIEW_MODEL}) of MR !${merge_request_iid}** (latest: ${reviewed_sha:0:8})" \
           "$review_scope_note"
         neutralize_gitlab_quick_actions < "$bounded_output_file"
-        if review_is_truncated "$review_char_count" "$HAC_AGENT_REVIEW_MAX_OUTPUT_CHARS"; then
+        if review_is_truncated "$review_char_count" "$GLA_AGENT_REVIEW_MAX_OUTPUT_CHARS"; then
           printf '\n\n_Review output was truncated at %s characters._' \
-            "$HAC_AGENT_REVIEW_MAX_OUTPUT_CHARS"
+            "$GLA_AGENT_REVIEW_MAX_OUTPUT_CHARS"
         fi
         printf '\n\n_Posted by Claude Code (AI agent) --- not written by a human._'
       } > "$review_body_file"
@@ -664,4 +664,4 @@
   allow_failure: true
 
 agent-review:
-  extends: .hac-agent-review
+  extends: .gla-agent-review

@@ -1,4 +1,4 @@
-# HACtions dogfooding: use our own Claude integration template
+# gla dogfooding: use our own Claude integration template
 #
 # Required CI/CD Variables (Settings > CI/CD > Variables):
 #   ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN — Databricks PAT
@@ -68,8 +68,8 @@ bats-tests:
       }
       # git_add_scope_exclusion.bats builds throwaway repos and commits in them,
       # which needs an identity and a deterministic default branch name.
-      git config --global user.email "ci@hactions.invalid"
-      git config --global user.name "HACtions CI"
+      git config --global user.email "ci@gla.invalid"
+      git config --global user.name "gla CI"
       git config --global init.defaultBranch main
   script:
     - bats --print-output-on-failure tests/lib/
@@ -124,7 +124,7 @@ check-lib-files-sync:
       echo "✅ LIB_FILES is in sync with scripts/lib/ ($(echo "$ACTUAL_LIST" | wc -l) modules)"
     - |
       # Verify review job's lib dependencies exist on disk.
-      # The .hac-claude-review template fetches these files; if they're renamed
+      # The .gla-claude-review template fetches these files; if they're renamed
       # or removed, the review job silently breaks for consumer repos.
       REVIEW_LIBS="gitlab-api.sh select-author-response.sh select-review-note.sh validate-nonnegative-integer.sh format-review-comment.sh review-tools.sh"
       for lib in $REVIEW_LIBS; do
@@ -135,9 +135,9 @@ check-lib-files-sync:
       done
       echo "✅ Review job lib dependencies verified ($REVIEW_LIBS)"
 
-# Override to use local scripts directly (since this IS the HACtions repo)
+# Override to use local scripts directly (since this IS the gla repo)
 claude-review:
-  extends: .hac-claude-review
+  extends: .gla-claude-review
   variables:
     CLAUDE_SELF_REVIEW: "true"
   before_script:
@@ -147,18 +147,18 @@ claude-review:
     - cp scripts/lib/*.sh .gitlab/scripts/lib/
 
 # The companion must also use this branch's local scripts. Without this
-# override, the inherited fetch path downloads HAC_HACTIONS_REF (normally main)
+# override, the inherited fetch path downloads GLA_REF (normally main)
 # and cannot dogfood companion changes made by the MR under review.
 claude-companion-review:
-  extends: .hac-claude-review
+  extends: .gla-claude-review
   variables:
     CLAUDE_SELF_REVIEW: "true"
   needs:
     - claude-review
   rules:
-    - if: $HAC_CLAUDE_COMPANION_REVIEW == "true" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+    - if: $GLA_CLAUDE_COMPANION_REVIEW == "true" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: always
-    - if: $HAC_CLAUDE_COMPANION_REVIEW == "true" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+    - if: $GLA_CLAUDE_COMPANION_REVIEW == "true" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
       when: delayed
       start_in: 60 seconds
   before_script:
@@ -168,10 +168,10 @@ claude-companion-review:
     - cp scripts/lib/*.sh .gitlab/scripts/lib/
   script:
     - chmod +x .gitlab/scripts/claude-review.sh
-    - REVIEW_MODEL=databricks-claude-sonnet-4-6 HAC_REVIEWER_ID=claude-companion HAC_REVIEW_AUTO_FIX=false HAC_REVIEW_INCLUDE_LEGACY_THREADS=false .gitlab/scripts/claude-review.sh
+    - REVIEW_MODEL=databricks-claude-sonnet-4-6 GLA_REVIEWER_ID=claude-companion GLA_REVIEW_AUTO_FIX=false GLA_REVIEW_INCLUDE_LEGACY_THREADS=false .gitlab/scripts/claude-review.sh
 
 claude-respond:
-  extends: .hac-claude-respond
+  extends: .gla-claude-respond
   before_script:
     - apt-get update -qq && apt-get install -y -qq curl git jq findutils perl > /dev/null 2>&1
     - |
@@ -183,6 +183,6 @@ claude-respond:
     - mkdir -p .gitlab/scripts/lib && cp scripts/claude-respond.sh .gitlab/scripts/ && cp scripts/lib/*.sh .gitlab/scripts/lib/
 
 check-new-line-breaks:
-  extends: .hac-check-new-line-breaks
+  extends: .gla-check-new-line-breaks
   before_script:
     - mkdir -p .gitlab/scripts && cp scripts/check-new-line-breaks.py .gitlab/scripts/

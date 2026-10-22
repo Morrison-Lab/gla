@@ -51,7 +51,7 @@ The real serialization is `resource_group: claude-agent` on the respond job.
   (gating clear on a `WIP_LOCK_ACQUIRED` flag) risks dangling labels on
   edge-case failures between set and flag-set.
 
-- **Review job is unserialized**: The `.hac-claude-review` job has no
+- **Review job is unserialized**: The `.gla-claude-review` job has no
   `resource_group`. Two rapid pushes can run two review jobs concurrently,
   each potentially triggering a respond pipeline. Bounded by `MAX_ITERATIONS`
   and `resource_group` on the respond side.

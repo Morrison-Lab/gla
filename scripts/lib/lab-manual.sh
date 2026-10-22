@@ -17,15 +17,15 @@ type log &>/dev/null || log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
 # Base URL for the lab manual site. Consumers can point this at their own
 # manual without changing the shared script.
-LAB_MANUAL_BASE_URL="${HAC_LAB_MANUAL_BASE_URL:-https://ucd-serg.github.io/lab-manual}"
+LAB_MANUAL_BASE_URL="${GLA_LAB_MANUAL_BASE_URL:-https://ucd-serg.github.io/lab-manual}"
 
 # Default pages to fetch when no diff-aware selection is possible.
-LAB_MANUAL_DEFAULT_PAGES="${HAC_LAB_MANUAL_DEFAULT_PAGES:-coding-style.html coding-practices.html}"
+LAB_MANUAL_DEFAULT_PAGES="${GLA_LAB_MANUAL_DEFAULT_PAGES:-coding-style.html coding-practices.html}"
 
 # Pages included for every diff-aware selection. Keep the SERG default for the
 # existing manual, but do not force it on consumers using another manual.
-if [[ -n "${HAC_LAB_MANUAL_ALWAYS_PAGES+x}" ]]; then
-  LAB_MANUAL_ALWAYS_PAGES="$HAC_LAB_MANUAL_ALWAYS_PAGES"
+if [[ -n "${GLA_LAB_MANUAL_ALWAYS_PAGES+x}" ]]; then
+  LAB_MANUAL_ALWAYS_PAGES="$GLA_LAB_MANUAL_ALWAYS_PAGES"
 elif [[ "$LAB_MANUAL_BASE_URL" == "https://ucd-serg.github.io/lab-manual" ]]; then
   LAB_MANUAL_ALWAYS_PAGES="coding-practices.html"
 else
@@ -33,12 +33,12 @@ else
 fi
 
 # Attribution shown in the assembled prompt context.
-LAB_MANUAL_NAME="${HAC_LAB_MANUAL_NAME:-SERG Lab Manual}"
+LAB_MANUAL_NAME="${GLA_LAB_MANUAL_NAME:-SERG Lab Manual}"
 
 # Space-separated glob|page rules used for diff-aware selection. Consumers can
 # replace this map when their manual uses different page names.
-if [[ -n "${HAC_LAB_MANUAL_PAGE_MAP+x}" ]]; then
-  LAB_MANUAL_PAGE_MAP="$HAC_LAB_MANUAL_PAGE_MAP"
+if [[ -n "${GLA_LAB_MANUAL_PAGE_MAP+x}" ]]; then
+  LAB_MANUAL_PAGE_MAP="$GLA_LAB_MANUAL_PAGE_MAP"
 else
   LAB_MANUAL_PAGE_MAP="*.R|coding-style.html *.r|coding-style.html *.Rmd|coding-style.html *.rmd|coding-style.html *.qmd|coding-style.html *.Rnw|coding-style.html *.yml|continuous-integration.html *.yaml|continuous-integration.html .gitlab-ci*|continuous-integration.html .github/*|continuous-integration.html renv.lock|reproducible-environments.html renv/*|reproducible-environments.html DESCRIPTION|reproducible-environments.html requirements.txt|reproducible-environments.html Pipfile*|reproducible-environments.html *.lock|reproducible-environments.html Dockerfile*|reproducible-environments.html *.md|writing.html vignettes/*|writing.html .gitignore|code-repositories.html .gitattributes|code-repositories.html"
 fi
@@ -91,7 +91,7 @@ _select_pages_for_diff() {
 
 # Maximum total bytes of lab manual content to include in prompt.
 # This prevents prompt bloat if pages are unexpectedly large.
-MAX_LAB_MANUAL_BYTES="${HAC_MAX_LAB_MANUAL_BYTES:-${MAX_LAB_MANUAL_BYTES:-40000}}"
+MAX_LAB_MANUAL_BYTES="${GLA_MAX_LAB_MANUAL_BYTES:-${MAX_LAB_MANUAL_BYTES:-40000}}"
 
 # Write complete UTF-8 lines whose byte total does not exceed the requested cap.
 # LC_ALL=C makes awk's length byte-based while preserving the original UTF-8

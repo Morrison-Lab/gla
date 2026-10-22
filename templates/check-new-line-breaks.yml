@@ -1,4 +1,4 @@
-# HACtions: Semantic line breaks check template
+# gla: Semantic line breaks check template
 # Include this in your .gitlab-ci.yml to flag newly-added Markdown lines
 # packing more than one sentence or clause onto a single source line.
 #
@@ -14,10 +14,10 @@
 #   NLB_CLAUSE_BREAKS:     "true" (default) to also flag long lines with mid-line semicolons (SemBr rule 5)
 #   NLB_CLAUSE_MIN_LENGTH: Minimum visible line length before clause check applies (default: 80)
 #   NLB_BASE_REF:          Explicit git ref/SHA to diff against (auto-detected if unset)
-#   HAC_NLB_IMAGE:         Docker image for the job (default: "python:3-slim")
-#   HAC_HACTIONS_PROJECT_ID: Project ID of the HACtions repo (default set below)
-#   HAC_NLB_REF:           Commit SHA of HACtions to fetch the checker script from
-#   HAC_NLB_SHA256:        Expected SHA256 checksum of check-new-line-breaks.py
+#   GLA_NLB_IMAGE:         Docker image for the job (default: "python:3-slim")
+#   GLA_PROJECT_ID: Project ID of the gla repo (default set below)
+#   GLA_NLB_REF:           Commit SHA of gla to fetch the checker script from
+#   GLA_NLB_SHA256:        Expected SHA256 checksum of check-new-line-breaks.py
 
 # These are TOP-LEVEL rather than job-level on purpose. GitLab gives job-level
 # `variables:` precedence over the global block, so defining them on the job
@@ -25,24 +25,24 @@
 # block -- which is exactly what the README tells them to do. Defined here, the
 # consumer's own file wins.
 variables:
-  HAC_NLB_IMAGE: "python:3-slim"
+  GLA_NLB_IMAGE: "python:3-slim"
   NLB_GLOBS: "*.md"
   NLB_PATHS_IGNORE: ""
   NLB_FAIL: "true"
   NLB_CLAUSE_BREAKS: "true"
   NLB_CLAUSE_MIN_LENGTH: "80"
   NLB_CODEQUALITY_REPORT: "gl-code-quality-report.json"
-  HAC_HACTIONS_PROJECT_ID: "2058"
-  # Pinned commit SHA in HACtions to fetch check-new-line-breaks.py from.
+  GLA_PROJECT_ID: "2058"
+  # Pinned commit SHA in gla to fetch check-new-line-breaks.py from.
   # Pin to an immutable SHA, never a branch.
-  HAC_NLB_REF: "f315152a6254f7d891dfe925f1d70a184af9827e"
+  GLA_NLB_REF: "f315152a6254f7d891dfe925f1d70a184af9827e"
   # Expected sha256 of check-new-line-breaks.py. Verified before the
-  # script runs. Set to "" to skip verification. MUST be updated whenever HAC_NLB_REF is.
-  HAC_NLB_SHA256: "ab8e7a6700963c59bfe041762112e41f969b727519b2e526d55e9f09ef26a3c9"
+  # script runs. Set to "" to skip verification. MUST be updated whenever GLA_NLB_REF is.
+  GLA_NLB_SHA256: "ab8e7a6700963c59bfe041762112e41f969b727519b2e526d55e9f09ef26a3c9"
 
-.hac-check-new-line-breaks:
+.gla-check-new-line-breaks:
   stage: lint
-  image: ${HAC_NLB_IMAGE}
+  image: ${GLA_NLB_IMAGE}
   variables:
     GIT_STRATEGY: clone
     GIT_CHECKOUT: "true"
@@ -129,38 +129,38 @@ variables:
         if [ -n "${GITLAB_TOKEN:-}" ]; then
           AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
         fi
-        TARGET_REF="${HAC_NLB_REF:-${HAC_HACTIONS_REF:-166525262340b33653cf7d2477e06456a76ac210}}"
-        SCRIPT_BASE="${CI_API_V4_URL}/projects/${HAC_HACTIONS_PROJECT_ID}/repository/files/scripts%2Fcheck-new-line-breaks%2Epy/raw"
+        TARGET_REF="${GLA_NLB_REF:-${GLA_REF:-166525262340b33653cf7d2477e06456a76ac210}}"
+        SCRIPT_BASE="${CI_API_V4_URL}/projects/${GLA_PROJECT_ID}/repository/files/scripts%2Fcheck-new-line-breaks%2Epy/raw"
         HTTP_CODE=$(curl -sS -w '%{http_code}' --get --header "$AUTH_HEADER" \
           --data-urlencode "ref=${TARGET_REF}" \
-          "$SCRIPT_BASE" -o .hac-check-new-line-breaks.py) || true
+          "$SCRIPT_BASE" -o .gla-check-new-line-breaks.py) || true
         HTTP_CODE="${HTTP_CODE:-000}"
         case "$HTTP_CODE" in
           2[0-9][0-9]) ;;
           *)
-            echo "ERROR: Failed to fetch check-new-line-breaks.py from HACtions (HTTP $HTTP_CODE)" >&2
+            echo "ERROR: Failed to fetch check-new-line-breaks.py from gla (HTTP $HTTP_CODE)" >&2
             echo "  URL: $SCRIPT_BASE?ref=$TARGET_REF" >&2
             exit 1
             ;;
         esac
-        if [ -n "${HAC_NLB_SHA256:-}" ]; then
-          ACTUAL_SHA="$(sha256sum .hac-check-new-line-breaks.py | awk '{print $1}')"
-          if [ "$ACTUAL_SHA" != "$HAC_NLB_SHA256" ]; then
+        if [ -n "${GLA_NLB_SHA256:-}" ]; then
+          ACTUAL_SHA="$(sha256sum .gla-check-new-line-breaks.py | awk '{print $1}')"
+          if [ "$ACTUAL_SHA" != "$GLA_NLB_SHA256" ]; then
             echo "ERROR: check-new-line-breaks.py checksum mismatch!" >&2
-            echo "  expected: $HAC_NLB_SHA256" >&2
+            echo "  expected: $GLA_NLB_SHA256" >&2
             echo "  actual:   $ACTUAL_SHA" >&2
-            echo "  If HAC_NLB_REF was bumped, update HAC_NLB_SHA256 to match." >&2
+            echo "  If GLA_NLB_REF was bumped, update GLA_NLB_SHA256 to match." >&2
             exit 1
           fi
           echo "check-new-line-breaks.py checksum verified."
         else
-          echo "WARNING: HAC_NLB_SHA256 is empty; executing check-new-line-breaks.py unverified." >&2
+          echo "WARNING: GLA_NLB_SHA256 is empty; executing check-new-line-breaks.py unverified." >&2
         fi
-        SCRIPT_PATH=".hac-check-new-line-breaks.py"
+        SCRIPT_PATH=".gla-check-new-line-breaks.py"
       fi
       python3 "$SCRIPT_PATH"
   after_script:
-    - rm -f .hac-check-new-line-breaks.py
+    - rm -f .gla-check-new-line-breaks.py
   artifacts:
     when: always
     reports:
@@ -168,4 +168,4 @@ variables:
         - ${NLB_CODEQUALITY_REPORT}
 
 check-new-line-breaks:
-  extends: .hac-check-new-line-breaks
+  extends: .gla-check-new-line-breaks

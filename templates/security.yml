@@ -1,4 +1,4 @@
-# HACtions: Security scanning template
+# gla: Security scanning template
 # Include this in your .gitlab-ci.yml for SAST and secret detection.
 #
 # This wraps GitLab's built-in security templates and assigns them

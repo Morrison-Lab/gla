@@ -5,10 +5,10 @@
 # check-phi.yml fetches a script from GitHub and EXECUTES it. Two properties
 # make that safe, and both are easy to break silently when bumping the pin:
 #
-#   1. HAC_GHA_REF must be a full 40-hex commit SHA. A branch name (e.g. "main")
+#   1. GLA_GHA_REF must be a full 40-hex commit SHA. A branch name (e.g. "main")
 #      still fetches successfully and still passes CI, so nothing reports that
 #      the pipeline has started executing unreviewed upstream code.
-#   2. HAC_PHI_SHA256 must be a full 64-hex digest. An empty or malformed value
+#   2. GLA_PHI_SHA256 must be a full 64-hex digest. An empty or malformed value
 #      makes the template skip verification with only a log warning.
 #
 # These are offline checks: they assert the shape of what is pinned, not that
@@ -20,7 +20,7 @@
 TEMPLATE="templates/check-phi.yml"
 
 # value_of KEY -- print the scalar assigned to KEY in the variables block.
-# Quotes are optional: an unquoted `HAC_GHA_REF: main` is valid YAML, and a
+# Quotes are optional: an unquoted `GLA_GHA_REF: main` is valid YAML, and a
 # quote-only matcher would return nothing for it -- so the pin assertions would
 # pass on an empty string rather than failing on a branch name.
 value_of() {
@@ -32,16 +32,16 @@ value_of() {
   [ -f "$TEMPLATE" ]
 }
 
-@test "HAC_GHA_REF is a full 40-hex commit SHA, not a branch name" {
-  run value_of HAC_GHA_REF
+@test "GLA_GHA_REF is a full 40-hex commit SHA, not a branch name" {
+  run value_of GLA_GHA_REF
   [ "$status" -eq 0 ]
   [ -n "$output" ]
   # Rejects "main", "v1", a short SHA, and any uppercase/typo'd digest.
   [[ "$output" =~ ^[0-9a-f]{40}$ ]]
 }
 
-@test "HAC_PHI_SHA256 is a full 64-hex digest" {
-  run value_of HAC_PHI_SHA256
+@test "GLA_PHI_SHA256 is a full 64-hex digest" {
+  run value_of GLA_PHI_SHA256
   [ "$status" -eq 0 ]
   [ -n "$output" ]
   [[ "$output" =~ ^[0-9a-f]{64}$ ]]
@@ -49,8 +49,8 @@ value_of() {
 
 @test "the fetch URL is built from the pinned ref, not a floating one" {
   # Guards against someone hardcoding /main/ into the URL while leaving
-  # HAC_GHA_REF in place, which would make the pin cosmetic.
-  run grep -c 'raw.githubusercontent.com/${HAC_GHA_REPO}/${HAC_GHA_REF}/' "$TEMPLATE"
+  # GLA_GHA_REF in place, which would make the pin cosmetic.
+  run grep -c 'raw.githubusercontent.com/${GLA_GHA_REPO}/${GLA_GHA_REF}/' "$TEMPLATE"
   [ "$status" -eq 0 ]
   [ "$output" -eq 1 ]
 }
@@ -65,9 +65,9 @@ value_of() {
 }
 
 @test "both the hidden job and its concrete job are defined" {
-  grep -qx '\.hac-check-phi:' "$TEMPLATE"
+  grep -qx '\.gla-check-phi:' "$TEMPLATE"
   grep -qx 'check-phi:' "$TEMPLATE"
-  grep -q 'extends: \.hac-check-phi' "$TEMPLATE"
+  grep -q 'extends: \.gla-check-phi' "$TEMPLATE"
 }
 
 @test "a failed fetch aborts rather than warning" {
@@ -94,10 +94,10 @@ value_of() {
 }
 
 @test "no value crosses script blocks through a sourced shell file" {
-  # Values were once written as KEY=VALUE into .hac-phi-env and sourced, so an
+  # Values were once written as KEY=VALUE into .gla-phi-env and sourced, so an
   # allowlist path containing a space was parsed as shell rather than used as a
   # path. Content files read with `cat` cannot do that.
-  ! grep -qE '^\s+\.\s+\./\.hac-phi' "$TEMPLATE"
+  ! grep -qE '^\s+\.\s+\./\.gla-phi' "$TEMPLATE"
   grep -q 'cat "\$PHI_TMP/base-ref"' "$TEMPLATE"
   grep -q 'cat "\$PHI_TMP/allowlist"' "$TEMPLATE"
 }
@@ -106,8 +106,8 @@ value_of() {
   # A fixed filename in the working tree would overwrite a consumer file tracked
   # at that path -- letting its real content evade a whole-tree scan -- and then
   # delete it on a reused shell-executor workspace.
-  ! grep -qE '> \.hac-|-o \.hac-|rm -f \.hac-' "$TEMPLATE"
-  grep -q 'PHI_TMP="\${TMPDIR:-/tmp}/hac-phi-\${CI_JOB_ID:-\$\$}"' "$TEMPLATE"
+  ! grep -qE '> \.gla-|-o \.gla-|rm -f \.gla-' "$TEMPLATE"
+  grep -q 'PHI_TMP="\${TMPDIR:-/tmp}/gla-phi-\${CI_JOB_ID:-\$\$}"' "$TEMPLATE"
 }
 
 @test "consumer-tunable variables are top-level, not job-level" {
@@ -115,16 +115,16 @@ value_of() {
   # defining these on the job would silently override the very thing the README
   # tells consumers to set. GIT_DEPTH is not consumer-tunable and stays on the job.
   top_level=$(sed -n '/^variables:/,/^$/p' "$TEMPLATE")
-  for key in HAC_PHI_IMAGE HAC_GHA_REPO HAC_GHA_REF HAC_PHI_SHA256 \
-             HAC_PHI_DETECTORS HAC_PHI_PATHS_IGNORE HAC_PHI_ALLOWLIST_FILE HAC_PHI_FAIL; do
+  for key in GLA_PHI_IMAGE GLA_GHA_REPO GLA_GHA_REF GLA_PHI_SHA256 \
+             GLA_PHI_DETECTORS GLA_PHI_PATHS_IGNORE GLA_PHI_ALLOWLIST_FILE GLA_PHI_FAIL; do
     echo "$top_level" | grep -q "^  ${key}:" || {
       echo "expected ${key} in the top-level variables block" >&2
       return 1
     }
   done
   # And none of them may reappear under the job.
-  job_block=$(sed -n '/^\.hac-check-phi:/,/^  before_script:/p' "$TEMPLATE")
-  ! echo "$job_block" | grep -qE '^\s+HAC_(PHI|GHA)_'
+  job_block=$(sed -n '/^\.gla-check-phi:/,/^  before_script:/p' "$TEMPLATE")
+  ! echo "$job_block" | grep -qE '^\s+GLA_(PHI|GHA)_'
 }
 
 @test "the job pins a real checkout, not just full history" {
@@ -132,7 +132,7 @@ value_of() {
   # GIT_STRATEGY: none or GIT_CHECKOUT: "false" would otherwise leave the
   # scanner walking an absent tree and reporting nothing -- a green PHI scan
   # that examined zero files.
-  job_block=$(sed -n '/^\.hac-check-phi:/,/^  rules:/p' "$TEMPLATE")
+  job_block=$(sed -n '/^\.gla-check-phi:/,/^  rules:/p' "$TEMPLATE")
   echo "$job_block" | grep -q 'GIT_STRATEGY: clone'
   echo "$job_block" | grep -q 'GIT_CHECKOUT: "true"'
   echo "$job_block" | grep -q 'GIT_DEPTH: 0'

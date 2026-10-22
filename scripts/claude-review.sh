@@ -42,7 +42,7 @@ trap cleanup EXIT
 
 # Source shared GitLab API helpers. MUST come after logging.sh (which defines
 # log/log_error that gitlab-api.sh uses).
-# COUPLING: path must match templates/claude.yml .hac-claude-review before_script.
+# COUPLING: path must match templates/claude.yml .gla-claude-review before_script.
 # See issue #12 (wip-signal.sh extraction) for planned decoupling.
 source "${SCRIPT_DIR}/lib/gitlab-api.sh"
 source "${SCRIPT_DIR}/lib/select-author-response.sh"
@@ -55,11 +55,11 @@ source "${SCRIPT_DIR}/lib/context-priority.sh"
 # REVIEW_MODEL is the provider-neutral setting. CLAUDE_MODEL remains as a
 # compatibility fallback for existing consumers of the claude.yml template.
 MODEL="${REVIEW_MODEL:-${CLAUDE_MODEL:-databricks-gpt-5-6-sol}}"
-REVIEWER_ID="${HAC_REVIEWER_ID:-primary}"
-AGENT_MODE="${HAC_REVIEW_AGENT:-true}"
-validate_boolean "HAC_REVIEW_AGENT" "$AGENT_MODE" || exit 1
-REVIEW_DEADLINE_SECONDS=${HAC_REVIEW_DEADLINE_SECONDS:-480}
-validate_nonnegative_integer "HAC_REVIEW_DEADLINE_SECONDS" "$REVIEW_DEADLINE_SECONDS" || exit 1
+REVIEWER_ID="${GLA_REVIEWER_ID:-primary}"
+AGENT_MODE="${GLA_REVIEW_AGENT:-true}"
+validate_boolean "GLA_REVIEW_AGENT" "$AGENT_MODE" || exit 1
+REVIEW_DEADLINE_SECONDS=${GLA_REVIEW_DEADLINE_SECONDS:-480}
+validate_nonnegative_integer "GLA_REVIEW_DEADLINE_SECONDS" "$REVIEW_DEADLINE_SECONDS" || exit 1
 REVIEW_DEADLINE=$(( REVIEW_START_EPOCH + REVIEW_DEADLINE_SECONDS ))
 
 # Helper: post an inline diff comment on a specific file/line in the MR.
@@ -205,12 +205,12 @@ fi
 
 # Optional opt-in guard: skip merge commits if explicitly configured (default: false).
 # By default, merge-commit MR heads (e.g. after syncing main) are reviewed against
-# the target branch using the full MR diff (HACtions#74). Set HAC_SKIP_MERGE_COMMITS=true
+# the target branch using the full MR diff (gla#74). Set GLA_SKIP_MERGE_COMMITS=true
 # to restore the skip behavior for push-triggered reviews.
-if [[ "${HAC_SKIP_MERGE_COMMITS:-false}" == "true" && "${CI_PIPELINE_SOURCE:-}" == "push" ]]; then
+if [[ "${GLA_SKIP_MERGE_COMMITS:-false}" == "true" && "${CI_PIPELINE_SOURCE:-}" == "push" ]]; then
   PARENT_FIELD_COUNT=$(git rev-list --parents -n 1 "$REVIEW_SHA" 2>/dev/null | wc -w)
   if [[ "$PARENT_FIELD_COUNT" -gt 2 ]]; then
-    log "HAC_SKIP_MERGE_COMMITS is enabled and merge commit detected ($((PARENT_FIELD_COUNT - 1)) parents) — skipping auto-review."
+    log "GLA_SKIP_MERGE_COMMITS is enabled and merge commit detected ($((PARENT_FIELD_COUNT - 1)) parents) — skipping auto-review."
     exit 0
   fi
 fi
@@ -253,7 +253,7 @@ fi
 # Truncate MR description to avoid prompt bloat (contains "Known Deferred Items"
 # and "Notes for Automated Reviewers" sections that inform the reviewer about
 # previously addressed concerns).
-MAX_MR_DESCRIPTION_CHARS=${HAC_MAX_MR_DESCRIPTION_CHARS:-2000}
+MAX_MR_DESCRIPTION_CHARS=${GLA_MAX_MR_DESCRIPTION_CHARS:-2000}
 MR_DESCRIPTION="${MR_DESCRIPTION:0:$MAX_MR_DESCRIPTION_CHARS}"
 
 # Check if the MR has the "claude-owned" label (signals Claude should auto-respond to reviews)
@@ -330,11 +330,11 @@ truncate_utf8_lines() {
   ' "$input_file" > "$output_file"
 }
 
-# Configurable diff size cap (bytes). Override via CI variable HAC_MAX_DIFF_BYTES.
+# Configurable diff size cap (bytes). Override via CI variable GLA_MAX_DIFF_BYTES.
 # 250 KB keeps typical multi-file MRs complete while retaining a hard prompt cap.
-MAX_DIFF_BYTES=${HAC_MAX_DIFF_BYTES:-250000}
-validate_nonnegative_integer "HAC_MAX_DIFF_BYTES" "$MAX_DIFF_BYTES" || {
-  log_error "HAC_MAX_DIFF_BYTES must be a non-negative decimal integer"
+MAX_DIFF_BYTES=${GLA_MAX_DIFF_BYTES:-250000}
+validate_nonnegative_integer "GLA_MAX_DIFF_BYTES" "$MAX_DIFF_BYTES" || {
+  log_error "GLA_MAX_DIFF_BYTES must be a non-negative decimal integer"
   exit 1
 }
 
@@ -433,7 +433,7 @@ COMMIT_MESSAGES=$(git log --format='%h %s' $(mr_log_range) 2>/dev/null || echo "
 # newline, so a bare `wc -l` would under-count by one. The diff uses a temp file
 # for the same reason -- here the value is line-counted rather than byte-counted,
 # so re-adding the one newline is exact.
-MAX_COMMIT_LINES=${HAC_MAX_COMMIT_LINES:-100}
+MAX_COMMIT_LINES=${GLA_MAX_COMMIT_LINES:-100}
 NUM_COMMITS=$(printf '%s\n' "$COMMIT_MESSAGES" | wc -l | tr -d ' ')
 if [[ $NUM_COMMITS -gt $MAX_COMMIT_LINES ]]; then
   # `|| true` guards the same SIGPIPE-under-pipefail case as the diff cap above.
@@ -458,9 +458,9 @@ log_step "BUILDING REVIEW CONTEXT"
 # required, which is what pushed this very script out of its own review context.
 KEY_FILES=""
 KEY_FILES_BYTES=0
-MAX_KEY_FILES_BYTES=${HAC_MAX_KEY_FILES_BYTES:-250000}
-validate_nonnegative_integer "HAC_MAX_KEY_FILES_BYTES" "$MAX_KEY_FILES_BYTES" || {
-  log_error "HAC_MAX_KEY_FILES_BYTES must be a non-negative decimal integer"
+MAX_KEY_FILES_BYTES=${GLA_MAX_KEY_FILES_BYTES:-250000}
+validate_nonnegative_integer "GLA_MAX_KEY_FILES_BYTES" "$MAX_KEY_FILES_BYTES" || {
+  log_error "GLA_MAX_KEY_FILES_BYTES must be a non-negative decimal integer"
   exit 1
 }
 
@@ -469,19 +469,19 @@ validate_nonnegative_integer "HAC_MAX_KEY_FILES_BYTES" "$MAX_KEY_FILES_BYTES" ||
 # claim about its SHARE of the budget, so a percentage is the honest expression
 # of it -- a hard-coded byte count silently becomes a different policy whenever
 # the total moves. Integer arithmetic, so this truncates; that is fine here.
-SINGLE_FILE_PCT=${HAC_MAX_SINGLE_FILE_PCT:-60}
-validate_nonnegative_integer "HAC_MAX_SINGLE_FILE_PCT" "$SINGLE_FILE_PCT" 100 || {
-  log_error "HAC_MAX_SINGLE_FILE_PCT must be a decimal integer from 0 to 100"
+SINGLE_FILE_PCT=${GLA_MAX_SINGLE_FILE_PCT:-60}
+validate_nonnegative_integer "GLA_MAX_SINGLE_FILE_PCT" "$SINGLE_FILE_PCT" 100 || {
+  log_error "GLA_MAX_SINGLE_FILE_PCT must be a decimal integer from 0 to 100"
   exit 1
 }
-MAX_SINGLE_FILE_BYTES=${HAC_MAX_SINGLE_FILE_BYTES:-$((MAX_KEY_FILES_BYTES * SINGLE_FILE_PCT / 100))}
-validate_nonnegative_integer "HAC_MAX_SINGLE_FILE_BYTES" "$MAX_SINGLE_FILE_BYTES" || {
-  log_error "HAC_MAX_SINGLE_FILE_BYTES must be a non-negative decimal integer"
+MAX_SINGLE_FILE_BYTES=${GLA_MAX_SINGLE_FILE_BYTES:-$((MAX_KEY_FILES_BYTES * SINGLE_FILE_PCT / 100))}
+validate_nonnegative_integer "GLA_MAX_SINGLE_FILE_BYTES" "$MAX_SINGLE_FILE_BYTES" || {
+  log_error "GLA_MAX_SINGLE_FILE_BYTES must be a non-negative decimal integer"
   exit 1
 }
-PRIORITY_RESERVE_PCT=${HAC_CONTEXT_PRIORITY_RESERVE_PCT:-50}
-validate_nonnegative_integer "HAC_CONTEXT_PRIORITY_RESERVE_PCT" "$PRIORITY_RESERVE_PCT" 100 || {
-  log_error "HAC_CONTEXT_PRIORITY_RESERVE_PCT must be a decimal integer from 0 to 100"
+PRIORITY_RESERVE_PCT=${GLA_CONTEXT_PRIORITY_RESERVE_PCT:-50}
+validate_nonnegative_integer "GLA_CONTEXT_PRIORITY_RESERVE_PCT" "$PRIORITY_RESERVE_PCT" 100 || {
+  log_error "GLA_CONTEXT_PRIORITY_RESERVE_PCT must be a decimal integer from 0 to 100"
   exit 1
 }
 # Give every eligible changed file a fair first share before using the remaining
@@ -634,24 +634,24 @@ log_step "FETCHING PRIOR REVIEW CONTEXT"
 PRIOR_REVIEW_CONTEXT=""
 REVIEW_NOTES="[]"
 REVIEW_PREFIX="🔍 **Auto-review by ${REVIEWER_ID} (${MODEL}) "
-MAX_REVIEW_HISTORY_CHARS=${HAC_MAX_REVIEW_HISTORY_CHARS:-12000}
-MAX_REVIEW_NOTES_CHARS=${HAC_MAX_REVIEW_NOTES_CHARS:-500000}
-MAX_PRIOR_REVIEW_CHARS=${HAC_MAX_PRIOR_REVIEW_CHARS:-3000}
-MAX_AUTHOR_RESPONSE_CHARS=${HAC_MAX_AUTHOR_RESPONSE_CHARS:-2000}
-validate_nonnegative_integer "HAC_MAX_REVIEW_HISTORY_CHARS" "$MAX_REVIEW_HISTORY_CHARS" || {
-  log_error "HAC_MAX_REVIEW_HISTORY_CHARS must be a non-negative integer"
+MAX_REVIEW_HISTORY_CHARS=${GLA_MAX_REVIEW_HISTORY_CHARS:-12000}
+MAX_REVIEW_NOTES_CHARS=${GLA_MAX_REVIEW_NOTES_CHARS:-500000}
+MAX_PRIOR_REVIEW_CHARS=${GLA_MAX_PRIOR_REVIEW_CHARS:-3000}
+MAX_AUTHOR_RESPONSE_CHARS=${GLA_MAX_AUTHOR_RESPONSE_CHARS:-2000}
+validate_nonnegative_integer "GLA_MAX_REVIEW_HISTORY_CHARS" "$MAX_REVIEW_HISTORY_CHARS" || {
+  log_error "GLA_MAX_REVIEW_HISTORY_CHARS must be a non-negative integer"
   exit 1
 }
-validate_nonnegative_integer "HAC_MAX_REVIEW_NOTES_CHARS" "$MAX_REVIEW_NOTES_CHARS" || {
-  log_error "HAC_MAX_REVIEW_NOTES_CHARS must be a non-negative decimal integer"
+validate_nonnegative_integer "GLA_MAX_REVIEW_NOTES_CHARS" "$MAX_REVIEW_NOTES_CHARS" || {
+  log_error "GLA_MAX_REVIEW_NOTES_CHARS must be a non-negative decimal integer"
   exit 1
 }
-validate_nonnegative_integer "HAC_MAX_PRIOR_REVIEW_CHARS" "$MAX_PRIOR_REVIEW_CHARS" || {
-  log_error "HAC_MAX_PRIOR_REVIEW_CHARS must be a non-negative decimal integer"
+validate_nonnegative_integer "GLA_MAX_PRIOR_REVIEW_CHARS" "$MAX_PRIOR_REVIEW_CHARS" || {
+  log_error "GLA_MAX_PRIOR_REVIEW_CHARS must be a non-negative decimal integer"
   exit 1
 }
-validate_nonnegative_integer "HAC_MAX_AUTHOR_RESPONSE_CHARS" "$MAX_AUTHOR_RESPONSE_CHARS" || {
-  log_error "HAC_MAX_AUTHOR_RESPONSE_CHARS must be a non-negative decimal integer"
+validate_nonnegative_integer "GLA_MAX_AUTHOR_RESPONSE_CHARS" "$MAX_AUTHOR_RESPONSE_CHARS" || {
+  log_error "GLA_MAX_AUTHOR_RESPONSE_CHARS must be a non-negative decimal integer"
   exit 1
 }
 TRUSTED_BOT_USERNAME="${CLAUDE_BOT_USERNAME:-}"
@@ -904,7 +904,7 @@ ${LAB_MANUAL_CONTENT}
 
 ${PRIOR_REVIEW_CONTEXT}
 
-${HAC_REVIEW_PROMPT_ADDENDUM:-}
+${GLA_REVIEW_PROMPT_ADDENDUM:-}
 
 ## Agent exploration
 You may use the read-only repository and documentation tools supplied with this
@@ -1005,14 +1005,14 @@ MAX_LLM_RETRIES=3
 HTTP_CODE=""
 HTTP_BODY=""
 
-MAX_REVIEW_TOOL_ROUNDS=${HAC_MAX_REVIEW_TOOL_ROUNDS:-8}
-validate_nonnegative_integer "HAC_MAX_REVIEW_TOOL_ROUNDS" "$MAX_REVIEW_TOOL_ROUNDS" || exit 1
-MAX_REVIEW_TOOL_CALLS=${HAC_MAX_REVIEW_TOOL_CALLS:-16}
-validate_nonnegative_integer "HAC_MAX_REVIEW_TOOL_CALLS" "$MAX_REVIEW_TOOL_CALLS" || exit 1
-MAX_REVIEW_TOOL_RESULT_CHARS=${HAC_MAX_REVIEW_TOOL_RESULT_CHARS:-120000}
-validate_nonnegative_integer "HAC_MAX_REVIEW_TOOL_RESULT_CHARS" "$MAX_REVIEW_TOOL_RESULT_CHARS" || exit 1
-MAX_REVIEW_RESPONSE_CHARS=${HAC_MAX_REVIEW_RESPONSE_CHARS:-200000}
-validate_nonnegative_integer "HAC_MAX_REVIEW_RESPONSE_CHARS" "$MAX_REVIEW_RESPONSE_CHARS" || exit 1
+MAX_REVIEW_TOOL_ROUNDS=${GLA_MAX_REVIEW_TOOL_ROUNDS:-8}
+validate_nonnegative_integer "GLA_MAX_REVIEW_TOOL_ROUNDS" "$MAX_REVIEW_TOOL_ROUNDS" || exit 1
+MAX_REVIEW_TOOL_CALLS=${GLA_MAX_REVIEW_TOOL_CALLS:-16}
+validate_nonnegative_integer "GLA_MAX_REVIEW_TOOL_CALLS" "$MAX_REVIEW_TOOL_CALLS" || exit 1
+MAX_REVIEW_TOOL_RESULT_CHARS=${GLA_MAX_REVIEW_TOOL_RESULT_CHARS:-120000}
+validate_nonnegative_integer "GLA_MAX_REVIEW_TOOL_RESULT_CHARS" "$MAX_REVIEW_TOOL_RESULT_CHARS" || exit 1
+MAX_REVIEW_RESPONSE_CHARS=${GLA_MAX_REVIEW_RESPONSE_CHARS:-200000}
+validate_nonnegative_integer "GLA_MAX_REVIEW_RESPONSE_CHARS" "$MAX_REVIEW_RESPONSE_CHARS" || exit 1
 REVIEW_TOOL_ROUND=0
 REVIEW_TOOL_RESULT_CHARS=0
 FORCE_FINAL_REVIEW=false
@@ -1182,7 +1182,7 @@ if [[ "$HTTP_CODE" == "200" ]]; then
   log "Response length: $(echo "$RESPONSE" | wc -c) bytes"
 
   # -----------------------------------------------------------------
-  # Fail loudly on an unusable response (HACtions#51). Some models (observed:
+  # Fail loudly on an unusable response (gla#51). Some models (observed:
   # databricks-claude-opus-5) return raw `reasoning` blocks with no `text`
   # block at all, instead of the expected review prose. That response still
   # extracts as a non-empty string via the jq filter above, parses as zero
@@ -1427,7 +1427,7 @@ The model returned a response with no usable review content (no findings marker,
       "$INLINE_FAILURES" -eq 0 &&
       "$INLINE_DROPPED" -eq 0 ]]; then
       resolve_verified_threads "$MR_IID" "$FINDINGS_JSON" "$latest_push_files" "$REVIEWER_ID" \
-        "${HAC_REVIEW_INCLUDE_LEGACY_THREADS:-true}" || true
+        "${GLA_REVIEW_INCLUDE_LEGACY_THREADS:-true}" || true
     else
       log "Skipping verified thread resolution because review context or structured findings were incomplete."
     fi
@@ -1451,7 +1451,7 @@ The model returned a response with no usable review content (no findings marker,
   # the review contains findings, trigger the claude-respond pipeline so the
   # bot can automatically address the review feedback.
   # -----------------------------------------------------------------
-  if [[ -n "${CLAUDE_TRIGGER_TOKEN:-}" && "${HAC_REVIEW_AUTO_FIX:-true}" == "true" ]]; then
+  if [[ -n "${CLAUDE_TRIGGER_TOKEN:-}" && "${GLA_REVIEW_AUTO_FIX:-true}" == "true" ]]; then
     # Check only the reviewed tip: historical bot authorship must not grant a
     # human push an autonomous repair.
     IS_BOT_COMMIT=false
@@ -1586,7 +1586,7 @@ The model returned a response with no usable review content (no findings marker,
     else
       log "Human-authored commit — no auto-trigger (review is informational only)."
     fi
-  elif [[ "${HAC_REVIEW_AUTO_FIX:-true}" != "true" ]]; then
+  elif [[ "${GLA_REVIEW_AUTO_FIX:-true}" != "true" ]]; then
     log "Review auto-fix disabled for this reviewer."
   else
     log "CLAUDE_TRIGGER_TOKEN not set — auto-trigger on review findings disabled."
