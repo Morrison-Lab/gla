@@ -32,7 +32,7 @@ variables:
   NLB_CLAUSE_BREAKS: "true"
   NLB_CLAUSE_MIN_LENGTH: "80"
   NLB_CODEQUALITY_REPORT: "gl-code-quality-report.json"
-  GLA_PROJECT_ID: "2058"
+  GLA_PROJECT_ID: "morri313%2Fgla"
   # Pinned commit SHA in gla to fetch check-new-line-breaks.py from.
   # Pin to an immutable SHA, never a branch.
   GLA_NLB_REF: "255b4778c6bd17e0d1bd750012499d05016cfe06"

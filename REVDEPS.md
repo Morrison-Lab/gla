@@ -16,3 +16,4 @@ or issue to be removed.
 
 | Repo | Templates used | Notes |
 |------|---------------|-------|
+| [`morri313/mlg`](https://gitlab.cs.wwu.edu/morri313/mlg) (mirror of `Morrison-Lab/mlg`) | `workflow.yml`, `check-new-line-breaks.yml` | Includes from `morri313/gla` at `main` |

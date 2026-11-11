@@ -32,7 +32,7 @@
 # Setup:
 #   1. Create a Pipeline Trigger Token (Settings > CI/CD > Pipeline triggers)
 #   2. Create a Webhook (Settings > Webhooks):
-#      URL: https://gitlab.example.com/api/v4/projects/<PROJECT_ID>/ref/<DEFAULT_BRANCH>/trigger/pipeline?token=<TRIGGER_TOKEN>
+#      URL: https://gitlab.cs.wwu.edu/api/v4/projects/<PROJECT_ID>/ref/<DEFAULT_BRANCH>/trigger/pipeline?token=<TRIGGER_TOKEN>
 #      Trigger: "Note events" only
 #   3. Set the CI/CD variables listed above
 #
@@ -78,7 +78,7 @@
     GIT_STRATEGY: clone
     GIT_CHECKOUT: "true"
     GIT_DEPTH: 0
-    GLA_PROJECT_ID: "2058"
+    GLA_PROJECT_ID: "morri313%2Fgla"
     GLA_REF: "main"
   before_script:
     - |
@@ -234,7 +234,7 @@
     GIT_CHECKOUT: "true"
     CLAUDE_ITERATION: "${CLAUDE_ITERATION:-1}"
     CLAUDE_MAX_ITERATIONS: "3"
-    GLA_PROJECT_ID: "2058"
+    GLA_PROJECT_ID: "morri313%2Fgla"
     GLA_REF: "main"
   before_script:
     - |

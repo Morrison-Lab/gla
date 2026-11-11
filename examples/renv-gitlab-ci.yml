@@ -5,7 +5,7 @@
 # Requires: renv.lock and renv/activate.R committed to your repo.
 
 include:
-  - project: 'example-group/gla'
+  - project: 'morri313/gla'
     ref: main
     file:
       - '/templates/workflow.yml'

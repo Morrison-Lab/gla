@@ -41,7 +41,7 @@
     # Set directly (not via GLA_R_LIBS_USER) — GitLab intra-block expansion is unreliable.
     R_LIBS_USER: "${CI_PROJECT_DIR}/ci/lib"
     # gla project coordinates for script fetching
-    GLA_PROJECT_ID: "2058"
+    GLA_PROJECT_ID: "morri313%2Fgla"
     GLA_REF: "main"
     # glr package project ID and ref (example-group/glr)
     GLA_GLR_PROJECT_ID: "2071"

@@ -62,6 +62,12 @@ automatically via `ref: main`.
 
 ### Fixed
 
+- **Real paths replace the placeholders.**
+  The docs, examples and templates now name `gitlab.cs.wwu.edu` and `morri313/gla`
+  where they said `gitlab.example.com` and `example-group/gla`.
+  `GLA_PROJECT_ID` now defaults to the URL-encoded path `morri313%2Fgla`,
+  which the GitLab API accepts in place of a numeric ID (#11).
+
 - **Content-free LLM responses no longer post as a clean review.** Some
   models can return a response with no usable review content (e.g. raw
   `reasoning` blocks with no prose) that previously extracted as an empty

@@ -25,7 +25,7 @@ Non-breaking improvements land on `main` continuously.
 
 To find the latest tag:
 - **GitLab UI:** Repository → Tags (sorted by date)
-- **CLI:** `git ls-remote --tags --refs https://gitlab.example.com/example-group/gla.git | sed 's#.*/##' | sort -V | tail -1`
+- **CLI:** `git ls-remote --tags --refs https://gitlab.cs.wwu.edu/morri313/gla.git | sed 's#.*/##' | sort -V | tail -1`
 
 ## Quick Start
 
@@ -33,7 +33,7 @@ In your repo's `.gitlab-ci.yml`:
 
 ```yaml
 include:
-  - project: 'example-group/gla'
+  - project: 'morri313/gla'
     ref: v2  # or 'main' for always-latest
     file:
       # ── Required ──────────────────────────────────────────────────────
@@ -152,7 +152,7 @@ behavior:
 | `GLA_NLB_REF` | pinned commit SHA | Commit SHA to fetch `check-new-line-breaks.py` at |
 | `GLA_NLB_SHA256` | digest of pinned file | Expected SHA256 checksum of `check-new-line-breaks.py` |
 | `SITE_BY_BRANCH` | `"TRUE"` | Deploy per-branch pkgdown sites |
-| `GLA_PROJECT_ID` | (set in the template) | Project ID of gla repo (for script fetching) |
+| `GLA_PROJECT_ID` | `"morri313%2Fgla"` | Numeric ID or URL-encoded path of the gla project (for script fetching) |
 | `GLA_REF` | `"main"` | Branch/tag of gla to fetch scripts from |
 | `REVIEW_MODEL` | `"databricks-gpt-5-6-sol"` | Databricks endpoint used for automatic review |
 | `GLA_CLAUDE_COMPANION_REVIEW` | `"false"` | Run an additional Claude Sonnet review |

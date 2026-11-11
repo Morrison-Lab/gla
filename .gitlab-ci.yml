@@ -8,7 +8,7 @@
 # Setup:
 #   1. Create a Pipeline Trigger Token (Settings > CI/CD > Pipeline triggers)
 #   2. Create a Webhook (Settings > Webhooks):
-#      URL: https://gitlab.example.com/api/v4/projects/<project-id>/ref/main/trigger/pipeline?token=<TRIGGER_TOKEN>
+#      URL: https://gitlab.cs.wwu.edu/api/v4/projects/<project-id>/ref/main/trigger/pipeline?token=<TRIGGER_TOKEN>
 #      Trigger: "Note events" only
 #   3. Set the CI/CD variables listed above
 

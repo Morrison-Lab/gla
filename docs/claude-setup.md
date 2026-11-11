@@ -54,7 +54,7 @@ Non-`@claude` comments exit in seconds, but you'll see these in your CI history.
 
 ## Prerequisites
 
-- A GitLab project on `gitlab.example.com` running **GitLab 17.3+**
+- A GitLab project on `gitlab.cs.wwu.edu` running **GitLab 17.3+**
   (the CI/CD job-token allowlist UI required for cross-project access is
   available in this version range)
 - A [Databricks Personal Access Token](https://<workspace>.cloud.databricks.com/)
@@ -205,11 +205,11 @@ API — no external server needed.
 3. Fill in the form:
    - **URL:** Use this format (replace the placeholders):
      ```
-     https://gitlab.example.com/api/v4/projects/<PROJECT_ID>/ref/<DEFAULT_BRANCH>/trigger/pipeline?token=<TRIGGER_TOKEN>
+     https://gitlab.cs.wwu.edu/api/v4/projects/<PROJECT_ID>/ref/<DEFAULT_BRANCH>/trigger/pipeline?token=<TRIGGER_TOKEN>
      ```
      For example:
      ```
-     https://gitlab.example.com/api/v4/projects/12345/ref/main/trigger/pipeline?token=glptt-abc123def456
+     https://gitlab.cs.wwu.edu/api/v4/projects/12345/ref/main/trigger/pipeline?token=glptt-abc123def456
      ```
      - Replace `<PROJECT_ID>` with your numeric project ID (from Step 3)
      - Replace `<DEFAULT_BRANCH>` with `main` (or your default branch)
@@ -230,7 +230,7 @@ Add `claude.yml` to your `include:` list and the `claude` stage:
 
 ```yaml
 include:
-  - project: 'example-group/gla'
+  - project: 'morri313/gla'
     ref: main
     file:
       - '/templates/claude.yml'

@@ -4,7 +4,7 @@
 # Copy this file to your repo as .gitlab-ci.yml and customize as needed.
 
 include:
-  - project: 'example-group/gla'
+  - project: 'morri313/gla'
     ref: main
     file:
       - '/templates/workflow.yml'
