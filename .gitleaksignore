@@ -1,2 +1,4 @@
 # Documentation example, not a credential: placeholder trigger token (#7)
 cdd12a747b2f7b13253266fcdc18bbd45d9d264f:docs/claude-setup.md:generic-api-key:212
+# The same example line on the real-wwu-paths branch, before its token became a row of Xs (#21)
+e9f315282b06ea1095d71956c7c4f8bbce4a2eff:docs/claude-setup.md:generic-api-key:212

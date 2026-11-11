@@ -209,7 +209,7 @@ API — no external server needed.
      ```
      For example:
      ```
-     https://gitlab.cs.wwu.edu/api/v4/projects/12345/ref/main/trigger/pipeline?token=glptt-abc123def456
+     https://gitlab.cs.wwu.edu/api/v4/projects/12345/ref/main/trigger/pipeline?token=glptt-XXXXXXXXXXXXXXXXXXXX
      ```
      - Replace `<PROJECT_ID>` with your numeric project ID (from Step 3)
      - Replace `<DEFAULT_BRANCH>` with `main` (or your default branch)
