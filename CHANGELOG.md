@@ -64,8 +64,9 @@ automatically via `ref: main`.
 
 - **Removed the tracked `.gitlab/scripts/` copy.**
   The directory is git-ignored and filled at job runtime, yet 16 files in it were tracked.
-  14 of them had drifted from `scripts/`, and `templates/claude.yml` prefers a local copy,
-  so this repository's own pipeline ran the stale versions (#13).
+  14 of them had drifted from `scripts/`.
+  `templates/claude.yml` prefers a local copy, so a job that does not first copy `scripts/` over them
+  would run the stale versions (#13).
 
 - **Content-free LLM responses no longer post as a clean review.** Some
   models can return a response with no usable review content (e.g. raw
