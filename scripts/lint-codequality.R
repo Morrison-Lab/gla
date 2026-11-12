@@ -22,7 +22,7 @@
 writeLines("[]", "lintr_results.json")
 
 # --- Helper functions from scripts/R/ ----------------------------------------
-# safe_char, safe_num, map_severity and lint_to_codequality live one per file
+# safe_char, safe_num, map_severity, and lint_to_codequality live one per file
 # in gla's scripts/R/ (they were the separate glr package until glr#7).
 # templates/lint.yml fetches them into GLA_R_HELPERS_DIR before running this
 # script. Fail fast, before the expensive load_all() and lint_package(), when

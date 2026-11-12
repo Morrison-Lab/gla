@@ -1,6 +1,6 @@
-# Runs the bats, Python and R test suites on GitHub, where pull requests are
+# Runs the bats, Python, and R test suites on GitHub, where pull requests are
 # reviewed and merged. `.gitlab-ci.yml` runs the same three suites on GitLab
-# (`bats-tests`, `test-check-new-line-breaks` and `test-r-helpers`);
+# (`bats-tests`, `test-check-new-line-breaks`, and `test-r-helpers`);
 # keep the commands in step.
 name: Tests
 

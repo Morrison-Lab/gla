@@ -14,9 +14,9 @@ automatically via `ref: main`.
 ### Changed
 
 - **The lint template no longer installs glr.**
-  The R helpers `scripts/lint-codequality.R` uses now live in gla's `scripts/R/`,
+  The R helpers that `scripts/lint-codequality.R` uses now live in gla's `scripts/R/`,
   and the template fetches them at `GLA_REF`, the same ref as the lint script (#15, Morrison-Lab/glr#7).
-  `GLA_GLR_PROJECT_ID`, `GLA_GLR_PROJECT_PATH`, `GLA_GLR_REF` and `GLA_GLR_FETCH_METHOD` are removed,
+  `GLA_GLR_PROJECT_ID`, `GLA_GLR_PROJECT_PATH`, `GLA_GLR_REF`, and `GLA_GLR_FETCH_METHOD` are removed,
   and a consumer that set them can drop them.
   `GLA_R_HELPERS_DIR` (default `.gla-R`) names the directory the helpers are fetched into.
 

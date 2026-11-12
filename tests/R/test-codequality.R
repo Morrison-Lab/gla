@@ -123,7 +123,7 @@ testthat::test_that("safe_char() returns the first value if it is non-empty", {
   testthat::expect_identical(safe_char(c("first", "second")), "first")
 })
 
-testthat::test_that("safe_char() returns the default for NULL, empty and NA", {
+testthat::test_that("safe_char() returns the default for NULL, empty, and NA", {
   for (value in list(NULL, character(0), "", NA_character_)) {
     testthat::expect_identical(safe_char(value), "")
     testthat::expect_identical(safe_char(value, "fallback"), "fallback")
@@ -148,7 +148,7 @@ testthat::test_that("safe_num() returns the default for a non-scalar element", {
   testthat::expect_identical(safe_num(list(c(1, 2)), 5L), 5L)
 })
 
-testthat::test_that("safe_num() returns the default for NULL, empty and NA", {
+testthat::test_that("safe_num() returns the default for NULL, empty, and NA", {
   testthat::expect_identical(safe_num(NULL), 0L)
   testthat::expect_identical(safe_num(NULL, 99L), 99L)
   testthat::expect_identical(safe_num(numeric(0)), 0L)

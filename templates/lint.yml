@@ -38,7 +38,8 @@
     # gla project coordinates for script fetching
     GLA_PROJECT_ID: "2058"
     GLA_REF: "main"
-    # Where the scripts/R/ helpers are fetched to; lint-codequality.R reads it.
+    # Where the scripts/R/ helpers are fetched to;
+    # lint-codequality.R reads the helpers from there.
     GLA_R_HELPERS_DIR: ".gla-R"
   except:
     - gh-pages
