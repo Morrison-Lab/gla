@@ -143,6 +143,11 @@ testthat::test_that("safe_num() returns the default for a non-numeric value", {
   testthat::expect_identical(safe_num(list("foo"), 3L), 3L)
 })
 
+testthat::test_that("safe_num() returns the default for a non-scalar element", {
+  testthat::expect_identical(safe_num(list(numeric(0)), 4L), 4L)
+  testthat::expect_identical(safe_num(list(c(1, 2)), 5L), 5L)
+})
+
 testthat::test_that("safe_num() returns the default for NULL, empty and NA", {
   testthat::expect_identical(safe_num(NULL), 0L)
   testthat::expect_identical(safe_num(NULL, 99L), 99L)
