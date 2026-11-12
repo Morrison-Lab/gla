@@ -84,7 +84,8 @@ test-check-new-line-breaks:
   script:
     - python3 -m unittest discover -s tests -p "test_*.py"
 
-# Run the tests for the lint template's R helpers in scripts/R/.
+# Run the tests for the R helpers in scripts/R/, ported from glr. The lint
+# template does not use them yet; the change that drops glr switches it over.
 test-r-helpers:
   stage: lint
   image: rocker/r-ver:4.4
