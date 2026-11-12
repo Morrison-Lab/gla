@@ -118,7 +118,7 @@ testthat::test_that("no lints give an empty JSON array", {
   testthat::expect_identical(as.character(json), "[]")
 })
 
-testthat::test_that("safe_char() returns the first non-empty value", {
+testthat::test_that("safe_char() returns the first value if it is non-empty", {
   testthat::expect_identical(safe_char("hello"), "hello")
   testthat::expect_identical(safe_char(c("first", "second")), "first")
 })
@@ -135,6 +135,12 @@ testthat::test_that("safe_num() returns the first value", {
   testthat::expect_identical(safe_num(3.14), 3.14)
   testthat::expect_identical(safe_num(c(10, 20, 30)), 10)
   testthat::expect_identical(safe_num(7L), 7L)
+})
+
+testthat::test_that("safe_num() returns the default for a non-numeric value", {
+  testthat::expect_identical(safe_num("foo"), 0L)
+  testthat::expect_identical(safe_num("12", 1L), 1L)
+  testthat::expect_identical(safe_num(list("foo"), 3L), 3L)
 })
 
 testthat::test_that("safe_num() returns the default for NULL, empty and NA", {
