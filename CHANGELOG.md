@@ -13,6 +13,10 @@ automatically via `ref: main`.
 
 ### Added
 
+- **GitHub Actions run the test suites.**
+  `.github/workflows/tests.yml` runs the bats suite and the Python unit tests on every pull request,
+  so a change is tested where it is reviewed (#12).
+
 - **`check-new-line-breaks.yml` template.**
   Diff-scoped check that flags
   newly-added Markdown lines packing more than one sentence or clause onto a
