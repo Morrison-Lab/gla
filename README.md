@@ -144,6 +144,7 @@ behavior:
 | `GLA_COVERAGE_ALLOW_FAILURE` | `"true"` | Whether coverage job can fail |
 | `GLA_PKGDOWN_INSTALL_QUARTO` | `"false"` | Install quarto for .qmd vignettes |
 | `LINTR_ERROR_ON_LINT` | `"true"` | Fail pipeline on lint findings |
+| `GLA_R_HELPERS_DIR` | `".gla-R"` | Directory the lint job fetches gla's `scripts/R/` helpers into |
 | `NLB_GLOBS` | `"*.md"` | Space-separated pathspecs for semantic line break check |
 | `NLB_PATHS_IGNORE` | `""` | Comma/newline-separated glob patterns to skip in line break check |
 | `NLB_FAIL` | `"true"` | Fail pipeline on semantic line break violations |

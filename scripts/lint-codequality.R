@@ -21,23 +21,36 @@
 # every syntax-error commit.
 writeLines("[]", "lintr_results.json")
 
-# --- Helper functions provided by the glr package ----------------------------
-# The glr package (https://gitlab.example.com/example-group/glr)
-# provides safe_char, safe_num, map_severity, and lint_to_codequality.
-# templates/lint.yml installs glr before running this script, so we use
-# namespace-qualified calls (glr::lint_to_codequality) below.
+# --- Helper functions from scripts/R/ ----------------------------------------
+# safe_char, safe_num, map_severity, and lint_to_codequality live one per file
+# in gla's scripts/R/ (they were the separate glr package until glr#7).
+# templates/lint.yml fetches them into GLA_R_HELPERS_DIR before running this
+# script. Fail fast, before the expensive load_all() and lint_package(), when
+# any of them is missing.
 # ------------------------------------------------------------------------------
-
-# Early guard: fail fast with a clear message if glr wasn't installed by the
-# lint template, before doing any expensive work (load_all, lint_package).
-if (!requireNamespace("glr", quietly = TRUE)) {
-  stop(
-    "The 'glr' package is not installed. ",
-    "templates/lint.yml should install it before running this script. ",
-    "See: https://gitlab.example.com/example-group/glr",
-    call. = FALSE
-  )
-}
+# The helpers go into their own environment, not the global one: the package's
+# namespace sees the global environment, so a name defined there would hide
+# object_usage_linter() findings for the same name in the linted code.
+gla_helpers <- local({
+  helpers_dir <- Sys.getenv("GLA_R_HELPERS_DIR", ".gla-R")
+  helper_names <- c("safe_char", "safe_num", "map_severity", "lint_to_codequality")
+  helper_files <- file.path(helpers_dir, paste0(helper_names, ".R"))
+  missing_helpers <- helper_files[!file.exists(helper_files)]
+  if (length(missing_helpers) > 0) {
+    stop(
+      "Missing gla R helper file(s): ",
+      paste(missing_helpers, collapse = ", "),
+      ". templates/lint.yml should fetch scripts/R/ into GLA_R_HELPERS_DIR ",
+      "before running this script.",
+      call. = FALSE
+    )
+  }
+  helpers <- new.env(parent = baseenv())
+  for (helper_file in helper_files) {
+    sys.source(helper_file, envir = helpers)
+  }
+  helpers
+})
 
 # Load the package so object_usage_linter() can resolve symbols.
 # If load_all() fails (e.g., syntax error in R/), the job fails here and
@@ -47,7 +60,7 @@ pkgload::load_all()
 lints <- lintr::lint_package()
 
 if (length(lints) > 0) {
-  lint_json <- lapply(lints, glr::lint_to_codequality)
+  lint_json <- lapply(lints, gla_helpers$lint_to_codequality)
 
   jsonlite::write_json(lint_json, "lintr_results.json", auto_unbox = TRUE)
   message(sprintf("Found %d lint issue(s).", length(lints)))

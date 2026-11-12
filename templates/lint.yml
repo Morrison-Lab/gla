@@ -9,25 +9,20 @@
 #                        from (default: "main"). Pin to a tag or SHA for
 #                        reproducible builds — "main" tracks latest.
 #   GLA_PROJECT_ID: Project ID of the gla repo (default set below).
-#   GLA_GLR_PROJECT_ID:    Project ID of the glr package repo (default set below).
-#   GLA_GLR_PROJECT_PATH:  Git path of the glr package repo
-#                           (default: "example-group/glr").
-#   GLA_GLR_REF:           Branch/tag/SHA of glr to install (default: "main").
-#   GLA_GLR_FETCH_METHOD:  "git" (default) or "archive". Git transport supports
-#                           branch/tag refs and avoids instance-specific archive
-#                           API restrictions. Use archive for commit-SHA pins.
-#                           Pin to a tag or SHA for reproducible builds.
+#   GLA_R_HELPERS_DIR: Directory the scripts/R/ helpers are fetched into
+#                        (default: ".gla-R").
 #
 # Security / Reproducibility:
-#   This template fetches and executes scripts/lint-codequality.R from gla
-#   and installs the glr package at runtime. The default `main` refs are moving
-#   targets — consumers implicitly trust gla/glr maintainers and accept that
-#   linting behavior may change between runs. For reproducible builds, **pin both
-#   GLA_REF and GLA_GLR_REF to a tag or commit SHA**. This is the
-#   recommended configuration for production/release pipelines.
+#   This template fetches and executes scripts/lint-codequality.R and the
+#   helpers it sources (scripts/R/*.R) from gla at runtime, all at GLA_REF.
+#   The default `main` ref is a moving target: consumers implicitly trust gla's
+#   maintainers and accept that linting behavior may change between runs.
+#   For reproducible builds, **pin GLA_REF to a tag or commit SHA**. This is
+#   the recommended configuration for production/release pipelines.
 #
-# The lint + Code Quality logic lives in scripts/lint-codequality.R (versioned,
-# lintable, testable). This template fetches it at runtime from gla.
+# The lint + Code Quality logic lives in scripts/lint-codequality.R and
+# scripts/R/ (versioned, lintable, testable). This template fetches them at
+# runtime from gla.
 
 .gla-linting:
   stage: lint
@@ -43,11 +38,9 @@
     # gla project coordinates for script fetching
     GLA_PROJECT_ID: "2058"
     GLA_REF: "main"
-    # glr package project ID and ref (example-group/glr)
-    GLA_GLR_PROJECT_ID: "2071"
-    GLA_GLR_PROJECT_PATH: "example-group/glr"
-    GLA_GLR_REF: "main"
-    GLA_GLR_FETCH_METHOD: "git"
+    # Where the scripts/R/ helpers are fetched to;
+    # lint-codequality.R reads the helpers from there.
+    GLA_R_HELPERS_DIR: ".gla-R"
   except:
     - gh-pages
   script:
@@ -71,114 +64,39 @@
           pak::pak(pkg = ".", upgrade = FALSE, dependencies = TRUE)
         '
       fi
-    # Install the glr helper package (provides glr::lint_to_codequality).
-    # glr lives in its own repo: example-group/glr
-    # This block is dep-manager-agnostic by design: regardless of whether the
-    # consumer uses pak or renv above, glr is always installed from a local source
-    # checkout + pak::local_install (which resolves glr's declared Imports).
-    # Git transport is the default because it works when an instance restricts the
-    # otherwise-supported repository archive API for cross-project job tokens.
-    # It supports named branch/tag refs; set GLA_GLR_FETCH_METHOD=archive for
-    # commit-SHA pins or the legacy archive-download behavior.
-    # Skip if glr is already installed (e.g. when linting the glr package itself).
+    # Fetch the R helpers that lint-codequality.R sources: scripts/R/ in gla,
+    # one function per file. They were the separate glr package until glr#7,
+    # and are fetched at GLA_REF with the script, so the two never disagree.
     - |
       set -euo pipefail
-      if Rscript -e 'if (requireNamespace("glr", quietly = TRUE)) quit(status = 0) else quit(status = 1)'; then
-        echo "glr already installed — skipping source fetch."
+      set +x
+      if [[ -n "${GITLAB_TOKEN:-}" ]]; then
+        GLA_AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
+      elif [[ -n "${CI_JOB_TOKEN:-}" ]]; then
+        GLA_AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN}"
       else
-      trap 'rm -rf .gla-tmp' EXIT
-      mkdir -p .gla-tmp
-      case "$GLA_GLR_FETCH_METHOD" in
-        git)
-          # Disable tracing before examining credential-bearing variables.
-          set +x
-          unset GLR_GIT_USERNAME GLR_GIT_PASSWORD GIT_ASKPASS GIT_TERMINAL_PROMPT
-          if [[ -n "${CI_JOB_TOKEN:-}" ]]; then
-            GLR_GIT_USERNAME=gitlab-ci-token
-            GLR_GIT_PASSWORD=$CI_JOB_TOKEN
-          elif [[ -n "${GITLAB_TOKEN:-}" ]]; then
-            GLR_GIT_USERNAME=oauth2
-            GLR_GIT_PASSWORD=$GITLAB_TOKEN
-          else
-            echo "ERROR: GLA_GLR_FETCH_METHOD=git requires GITLAB_TOKEN or CI_JOB_TOKEN" >&2
-            exit 1
-          fi
-          command -v git >/dev/null || {
-            echo "ERROR: git is required for GLA_GLR_FETCH_METHOD=git" >&2
-            exit 1
-          }
-          # Keep the job token out of the remote URL and command arguments.
-          umask 077
-          GLR_ASKPASS=$(mktemp)
-          trap 'rm -f "$GLR_ASKPASS"; rm -rf .gla-tmp' EXIT
-          printf '%s\n' '#!/bin/sh' \
-            'case "$1" in' \
-            '  *Username*) printf "%s\\n" "$GLR_GIT_USERNAME" ;;' \
-            '  *Password*) printf "%s\\n" "$GLR_GIT_PASSWORD" ;;' \
-            '  *) exit 1 ;;' \
-            'esac' > "$GLR_ASKPASS"
-          chmod 700 "$GLR_ASKPASS"
-          GLR_REPO_URL="${CI_SERVER_URL}/${GLA_GLR_PROJECT_PATH}.git"
-          LC_ALL=C GIT_ASKPASS="$GLR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
-            GLR_GIT_USERNAME="$GLR_GIT_USERNAME" GLR_GIT_PASSWORD="$GLR_GIT_PASSWORD" \
-            git clone --depth 1 --no-checkout "$GLR_REPO_URL" .gla-tmp/glr
-          if [[ "$GLA_GLR_REF" =~ ^[0-9a-fA-F]{7,40}$ ]] && ! \
-            LC_ALL=C GIT_ASKPASS="$GLR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
-              GLR_GIT_USERNAME="$GLR_GIT_USERNAME" GLR_GIT_PASSWORD="$GLR_GIT_PASSWORD" \
-              git -C .gla-tmp/glr ls-remote --exit-code origin \
-              "refs/heads/${GLA_GLR_REF}" "refs/tags/${GLA_GLR_REF}" >/dev/null; then
-            echo "ERROR: Git transport cannot reliably fetch a bare commit SHA." >&2
-            echo "  Set GLA_GLR_FETCH_METHOD=archive for commit-SHA pins," >&2
-            echo "  or use a named branch/tag with GLA_GLR_FETCH_METHOD=git." >&2
-            exit 1
-          fi
-          LC_ALL=C GIT_ASKPASS="$GLR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
-            GLR_GIT_USERNAME="$GLR_GIT_USERNAME" GLR_GIT_PASSWORD="$GLR_GIT_PASSWORD" \
-            git -C .gla-tmp/glr fetch --depth 1 origin "$GLA_GLR_REF"
-          LC_ALL=C GIT_ASKPASS="$GLR_ASKPASS" GIT_TERMINAL_PROMPT=0 \
-            GLR_GIT_USERNAME="$GLR_GIT_USERNAME" GLR_GIT_PASSWORD="$GLR_GIT_PASSWORD" \
-            git -C .gla-tmp/glr checkout --detach FETCH_HEAD
-          ;;
-        archive)
-          set +x
-          if [[ -n "${GITLAB_TOKEN:-}" ]]; then
-            GLR_AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
-          elif [[ -n "${CI_JOB_TOKEN:-}" ]]; then
-            GLR_AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN}"
-          else
-            echo "ERROR: GLA_GLR_FETCH_METHOD=archive requires GITLAB_TOKEN or CI_JOB_TOKEN" >&2
-            exit 1
-          fi
-          GLR_URL="${CI_API_V4_URL}/projects/${GLA_GLR_PROJECT_ID}/repository/archive.tar.gz?sha=${GLA_GLR_REF}"
-          HTTP_CODE=$(curl -sS -w '%{http_code}' --header "$GLR_AUTH_HEADER" \
-            "$GLR_URL" -o .gla-tmp/glr.tar.gz) || true
-          HTTP_CODE="${HTTP_CODE:-000}"
-          [[ "$HTTP_CODE" =~ ^[0-9]+$ ]] || HTTP_CODE=000
-          if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
-            echo "ERROR: Failed to fetch glr archive (HTTP $HTTP_CODE)" >&2
-            echo "  URL: $GLR_URL" >&2
-            echo "  Check GLA_GLR_PROJECT_ID ($GLA_GLR_PROJECT_ID) and GLA_GLR_REF ($GLA_GLR_REF)." >&2
-            exit 1
-          fi
-          if [[ ! -s .gla-tmp/glr.tar.gz ]]; then
-            echo "ERROR: Fetched glr archive is empty" >&2; exit 1
-          fi
-          mkdir -p .gla-tmp/glr
-          tar xzf .gla-tmp/glr.tar.gz -C .gla-tmp/glr --strip-components=1
-          ;;
-        *)
-          echo "ERROR: GLA_GLR_FETCH_METHOD must be git or archive" >&2
-          exit 1
-          ;;
-      esac
-      # Use pak::local_install to resolve glr's declared Imports (e.g. digest)
-      # rather than install.packages(repos=NULL) which skips dependencies.
-      Rscript -e '
-        if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
-        pak::local_install(".gla-tmp/glr", upgrade = FALSE)
-      '
-      rm -rf .gla-tmp
+        echo "ERROR: R helper retrieval requires GITLAB_TOKEN or CI_JOB_TOKEN" >&2
+        exit 1
       fi
+      mkdir -p "$GLA_R_HELPERS_DIR"
+      for helper in safe_char safe_num map_severity lint_to_codequality; do
+        HELPER_URL="${CI_API_V4_URL}/projects/${GLA_PROJECT_ID}/repository/files/scripts%2FR%2F${helper}.R/raw?ref=${GLA_REF}"
+        HTTP_CODE=$(curl -sS -w '%{http_code}' --header "$GLA_AUTH_HEADER" \
+          "$HELPER_URL" -o "${GLA_R_HELPERS_DIR}/${helper}.R") || true
+        HTTP_CODE="${HTTP_CODE:-000}"
+        [[ "$HTTP_CODE" =~ ^[0-9]+$ ]] || HTTP_CODE=000
+        if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+          echo "ERROR: Failed to fetch scripts/R/${helper}.R from gla (HTTP $HTTP_CODE)" >&2
+          echo "  URL: $HELPER_URL" >&2
+          echo "  Check GLA_PROJECT_ID and GLA_REF values." >&2
+          exit 1
+        fi
+        # Rejects an empty body, a proxy HTML page or a JSON error body.
+        if ! grep -qE "^${helper} <- function" "${GLA_R_HELPERS_DIR}/${helper}.R"; then
+          echo "ERROR: Fetched scripts/R/${helper}.R does not define ${helper}()" >&2
+          exit 1
+        fi
+      done
     # Fetch and run the lint + Code Quality script from gla
     - |
       set -euo pipefail
