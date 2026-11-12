@@ -32,14 +32,14 @@ jobs:
     steps:
       - name: Parse this workflow's ref
         id: this-wf
-        uses: Morrison-Lab/gha/.github/actions/parse-workflow-ref@v2
+        uses: Morrison-Lab/gha/.github/actions/parse-workflow-ref@v3
         with:
           workflow-ref: ${{ github.workflow_ref }}
 
       - name: Classify whether this PR edits workflow YAML
         id: wf-edits
         continue-on-error: true
-        uses: Morrison-Lab/gha/.github/actions/detect-pr-workflow-edits@v2
+        uses: Morrison-Lab/gha/.github/actions/detect-pr-workflow-edits@v3
         with:
           pr-number: ${{ github.event.issue.number }}
           caller-workflow-path: ${{ steps.this-wf.outputs.path }}
