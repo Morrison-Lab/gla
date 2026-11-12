@@ -21,3 +21,8 @@ Working facts for anyone (human or `@claude`) developing this repo itself.
   `.github/workflows/claude-review.yml`, a caller of `Morrison-Lab/gha`;
   a trusted author's `/review` comment re-runs it.
   This is separate from the GitLab `claude-review` job above.
+- **Placeholders stay**: this repository is public, so it never names
+  the real GitLab host, a personal namespace, or a private repository.
+  `gitlab.example.com` and `example-group/...` stay in the templates and
+  docs, and a consumer sets its real values in its own CI variables
+  (Ezra, 2026-11-11, when closing #21).
