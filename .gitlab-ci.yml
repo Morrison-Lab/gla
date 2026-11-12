@@ -84,6 +84,16 @@ test-check-new-line-breaks:
   script:
     - python3 -m unittest discover -s tests -p "test_*.py"
 
+# Run the tests for the R helpers in scripts/R/, ported from glr. The lint
+# template does not use them yet; the change that drops glr switches it over.
+test-r-helpers:
+  stage: lint
+  image: rocker/r-ver:4.4
+  needs: []
+  script:
+    - Rscript -e 'install.packages(c("testthat", "digest", "jsonlite"))'
+    - Rscript -e 'testthat::test_file("tests/R/test-codequality.R", stop_on_failure = TRUE)'
+
 
 # Verify the LIB_FILES list in templates/claude.yml stays in sync with scripts/lib/
 check-lib-files-sync:

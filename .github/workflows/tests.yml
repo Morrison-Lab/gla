@@ -1,6 +1,7 @@
-# Runs the bats and Python test suites on GitHub, where pull requests are
-# reviewed and merged. `.gitlab-ci.yml` runs the same two suites on GitLab
-# (`bats-tests` and `test-check-new-line-breaks`); keep the commands in step.
+# Runs the bats, Python and R test suites on GitHub, where pull requests are
+# reviewed and merged. `.gitlab-ci.yml` runs the same three suites on GitLab
+# (`bats-tests`, `test-check-new-line-breaks` and `test-r-helpers`);
+# keep the commands in step.
 name: Tests
 
 on:
@@ -62,3 +63,21 @@ jobs:
 
       - name: Run the Python unit tests
         run: python3 -m unittest discover -s tests -p "test_*.py"
+
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install the packages the R helpers and their tests use
+        run: Rscript -e 'install.packages(c("testthat", "digest", "jsonlite"))'
+
+      - name: Run the R helper tests
+        run: Rscript -e 'testthat::test_file("tests/R/test-codequality.R", stop_on_failure = TRUE)'
